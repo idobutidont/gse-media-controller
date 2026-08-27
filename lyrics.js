@@ -36,11 +36,11 @@ export function isRTLText(text) {
  * @param {string} title
  * @returns {string}
  */
-export function sanitizeTitle(title) {
+export function sanitizeTitle(title, artist = '') {
     if (!title)
         return '';
 
-    return title
+    let cleaned = title
         /* Remove feature tags like (feat. Artist) or [feat. Artist] */
         .replace(/[({\[][^)}\]]*(?:feat|featuring|ft\.)[^)}\]]*[)}\]]/gi, '')
         /* Remove official audio/video/lyrics tags */
@@ -50,8 +50,14 @@ export function sanitizeTitle(title) {
         /* Remove Japanese/Chinese style brackets like 【Official Video】 */
         .replace(/【[^】]*】/g, '')
         /* Remove trailing - Single, - EP, or - Remastered 2021 */
-        .replace(/\s*-\s*(?:remaster(?:ed)?(?:\s+\d+)?|live|single|ep)\s*$/i, '')
-        .trim();
+        .replace(/\s*-\s*(?:remaster(?:ed)?(?:\s+\d+)?|live|single|ep)\s*$/i, '');
+
+    if (artist) {
+        const escaped = artist.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        cleaned = cleaned.replace(new RegExp(`\\s*-\\s*${escaped}\\s*$`, 'i'), '');
+    }
+
+    return cleaned.trim();
 }
 
 /**
@@ -316,16 +322,21 @@ export const LyricsManager = GObject.registerClass({
     }
 
     async _fetchAndCache(key, title, artist, album, durationSeconds) {
-        /* Check disk cache */
+        /* Check disk cache: if synced or instrumental, we can return immediately */
         const diskData = await this._readFromDisk(key);
-        if (diskData) {
+        if (diskData && (diskData.synced || diskData.isInstrumental)) {
             this._memoryCache.set(key, diskData);
             return diskData;
         }
 
-        /* Query LRCLIB */
+        /* Query LRCLIB for synced (or plain) lyrics */
         const raw = await this._queryLrclib(title, artist, album, durationSeconds);
         if (!raw) {
+            if (diskData) {
+                this._memoryCache.set(key, diskData);
+                return diskData;
+            }
+
             /* Cache negative result in memory to avoid repeated requests during playback */
             const emptyData = new LyricsData({
                 trackKey: key,
@@ -362,8 +373,9 @@ export const LyricsManager = GObject.registerClass({
 
     /* LRCLIB HTTP Query */
     async _queryLrclib(title, artist, album, durationSeconds) {
-
         try {
+            let plainFallback = null;
+
             /* 1. Try exact match /api/get */
             const getParams = {
                 track_name: title,
@@ -374,42 +386,70 @@ export const LyricsManager = GObject.registerClass({
 
             const getUrl = `${LRCLIB_BASE}/get?${buildQuery(getParams)}`;
             const exactRes = await this._httpGet(getUrl);
-            if (exactRes && (exactRes.syncedLyrics || exactRes.plainLyrics || exactRes.instrumental))
-                return exactRes;
+            if (exactRes) {
+                /* If exact match has synced lyrics or is instrumental, return immediately */
+                if (exactRes.syncedLyrics || exactRes.instrumental)
+                    return exactRes;
+                /* If exact match only has plain lyrics, save as fallback and keep searching for synced */
+                if (exactRes.plainLyrics)
+                    plainFallback = exactRes;
+            }
 
-            /* 2. Try search /api/search with sanitized title */
-            const cleanTitle = sanitizeTitle(title);
+            /* 2. Try structured search with sanitized title & artist */
+            const cleanTitle = sanitizeTitle(title, artist);
             const searchParams = {
                 track_name: cleanTitle,
                 artist_name: artist || '',
             };
 
             const searchUrl = `${LRCLIB_BASE}/search?${buildQuery(searchParams)}`;
-            const searchRes = await this._httpGet(searchUrl);
+            let searchRes = await this._httpGet(searchUrl);
 
-            if (Array.isArray(searchRes) && searchRes.length > 0) {
-                /* Filter candidates with synced lyrics, falling back to all candidates */
-                const withSynced = searchRes.filter(item => item.syncedLyrics);
-                const candidates = withSynced.length > 0 ? withSynced : searchRes;
-
-                /* When track length is known, prioritize the closest duration match */
-                if (durationSeconds > 0) {
-                    candidates.sort((a, b) => {
-                        const diffA = Math.abs((a.duration || 0) - durationSeconds);
-                        const diffB = Math.abs((b.duration || 0) - durationSeconds);
-                        return diffA - diffB;
-                    });
-
-                    /* If the closest candidate is within 10s tolerance, use it */
-                    if (Math.abs((candidates[0].duration || 0) - durationSeconds) <= 10)
-                        return candidates[0];
+            /* If no results, try general search query /api/search?q=... */
+            if (!Array.isArray(searchRes) || searchRes.length === 0) {
+                const q = [cleanTitle, artist].filter(Boolean).join(' ');
+                if (q) {
+                    const qUrl = `${LRCLIB_BASE}/search?${buildQuery({ q })}`;
+                    searchRes = await this._httpGet(qUrl);
                 }
-
-                return candidates[0];
             }
 
+            if (Array.isArray(searchRes) && searchRes.length > 0) {
+                /* Filter candidates with synced lyrics */
+                const withSynced = searchRes.filter(item => item.syncedLyrics);
+                if (withSynced.length > 0) {
+                    if (durationSeconds > 0) {
+                        withSynced.sort((a, b) => {
+                            const diffA = Math.abs((a.duration || 0) - durationSeconds);
+                            const diffB = Math.abs((b.duration || 0) - durationSeconds);
+                            return diffA - diffB;
+                        });
 
-            return null;
+                        /* Prioritize candidates matching duration within ±15s */
+                        if (Math.abs((withSynced[0].duration || 0) - durationSeconds) <= 15)
+                            return withSynced[0];
+                    }
+
+                    return withSynced[0];
+                }
+
+                /* No synced candidate found in search, check for plain lyrics fallback */
+                if (!plainFallback) {
+                    const withPlain = searchRes.filter(item => item.plainLyrics);
+                    if (withPlain.length > 0) {
+                        if (durationSeconds > 0) {
+                            withPlain.sort((a, b) => {
+                                const diffA = Math.abs((a.duration || 0) - durationSeconds);
+                                const diffB = Math.abs((b.duration || 0) - durationSeconds);
+                                return diffA - diffB;
+                            });
+                        }
+                        plainFallback = withPlain[0];
+                    }
+                }
+            }
+
+            return plainFallback;
         } catch (e) {
             if (!e.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
                 console.warn(`media-controls: lyrics query failed: ${e.message}`);
