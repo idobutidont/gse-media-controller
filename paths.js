@@ -14,3 +14,10 @@ export function artCacheDir() {
     return Gio.File.new_for_path(GLib.build_filenamev(
         [GLib.get_user_cache_dir(), 'media-controls', 'art']));
 }
+
+/** @returns {Gio.File} the directory downloaded lyrics are cached in */
+export function lyricsCacheDir() {
+    return Gio.File.new_for_path(GLib.build_filenamev(
+        [GLib.get_user_cache_dir(), 'media-controls', 'lyrics']));
+}
+

@@ -99,7 +99,7 @@ export const MediaCard = GObject.registerClass({
         'player-selected': {param_types: [GObject.TYPE_STRING]},
     },
 }, class MediaCard extends St.BoxLayout {
-    _init(artCache, settings) {
+    _init(artCache, lyricsManager, settings) {
         super._init({
             style_class: 'mc-card',
             orientation: Clutter.Orientation.VERTICAL,
@@ -107,6 +107,7 @@ export const MediaCard = GObject.registerClass({
         });
 
         this._artCache = artCache;
+        this._lyricsManager = lyricsManager;
         this._settings = settings;
         this._player = null;
         this._playerSignals = [];
@@ -127,8 +128,15 @@ export const MediaCard = GObject.registerClass({
         this._tabsKey = null;
         this._activeBusName = null;
 
+        /* Live lyrics state */
+        this._lyricsData = null;
+        this._lyricsExpanded = false;
+        this._lyricsLineActors = [];
+        this._activeLyricIndex = -1;
+
         this._buildSwitcher();
         this._buildHeader();
+        this._buildLyricsView();
         this._buildSeekBar();
         this._buildControls();
 
@@ -140,14 +148,25 @@ export const MediaCard = GObject.registerClass({
             this._settings.connect('changed::card-show-loop', () => this.sync()),
             this._settings.connect('changed::card-show-player-switcher',
                 () => this._updateSwitcher()),
+            this._settings.connect('changed::show-lyrics-in-card', () => this._syncLyrics()),
+            this._settings.connect('changed::card-show-lyrics-button', () => this._syncLyrics()),
             this._settings.connect('changed::card-width', () => this._applyWidth()),
             this._settings.connect('changed::card-art-size', () => this._applyArtSize()),
         ];
+
+        this._lyricsSignalId = this._lyricsManager.connect('lyrics-loaded', (_m, key) => {
+            if (this._player && this._lyricsManager.trackKey(this._player.artist, this._player.title) === key) {
+                this._lyricsData = this._lyricsManager.currentLyrics;
+                this._syncLyrics();
+            }
+        });
+
         this._applyWidth();
         this._applyArtSize();
 
         this.connect('destroy', () => this._onDestroy());
     }
+
 
     /* One tab per running player, stacked into a column left of the gear in the
      * header's action column. Hidden — and left empty — whenever there is
@@ -355,9 +374,17 @@ export const MediaCard = GObject.registerClass({
         });
         this._prefsButton.connect('clicked', () => this.emit('open-preferences'));
 
-        /* The top of the column: the stack of player tabs, then the gear in the
-         * corner. With one player the tabs are hidden and this is the gear on
-         * its own, exactly as before. */
+        /* Lyrics button to toggle the full synced lyrics view */
+        this._lyricsButton = new St.Button({
+            style_class: 'mc-app-button mc-lyrics-toggle-button',
+            can_focus: true,
+            y_align: Clutter.ActorAlign.START,
+            visible: false,
+            child: new St.Icon({icon_name: 'view-paged-symbolic', icon_size: 16}),
+        });
+        this._lyricsButton.connect('clicked', () => this._toggleLyricsView());
+
+        /* The top of the column: the stack of player tabs, the lyrics button, then the gear. */
         const topRow = new St.BoxLayout({
             style_class: 'mc-card-actions-top',
             orientation: Clutter.Orientation.HORIZONTAL,
@@ -365,6 +392,7 @@ export const MediaCard = GObject.registerClass({
             y_align: Clutter.ActorAlign.START,
         });
         topRow.add_child(this._switcherBox);
+        topRow.add_child(this._lyricsButton);
         topRow.add_child(this._prefsButton);
         actions.add_child(topRow);
 
@@ -384,6 +412,65 @@ export const MediaCard = GObject.registerClass({
         header.add_child(actions);
         this.add_child(header);
     }
+
+    _buildLyricsView() {
+        this._lyricsContainer = new St.BoxLayout({
+            style_class: 'mc-lyrics-container',
+            orientation: Clutter.Orientation.VERTICAL,
+            x_expand: true,
+            visible: false,
+        });
+
+        /* Compact single-line lyrics preview */
+        this._lyricsCompactBox = new St.Button({
+            style_class: 'mc-lyrics-compact',
+            can_focus: true,
+            x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        const compactInner = new St.BoxLayout({
+            orientation: Clutter.Orientation.HORIZONTAL,
+            style_class: 'mc-lyrics-compact-inner',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._lyricsCompactIcon = new St.Icon({
+            icon_name: 'view-paged-symbolic',
+            style_class: 'mc-lyrics-icon',
+            icon_size: 14,
+        });
+        this._lyricsCompactLabel = new St.Label({
+            style_class: 'mc-lyrics-compact-text',
+            text: '',
+            y_align: Clutter.ActorAlign.CENTER,
+            x_expand: true,
+        });
+        this._lyricsCompactLabel.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+
+        compactInner.add_child(this._lyricsCompactIcon);
+        compactInner.add_child(this._lyricsCompactLabel);
+        this._lyricsCompactBox.set_child(compactInner);
+        this._lyricsCompactBox.connect('clicked', () => this._toggleLyricsView());
+
+        /* Full scrollable synced lyrics list */
+        this._lyricsScrollView = new St.ScrollView({
+            style_class: 'mc-lyrics-scroll-view',
+            vscrollbar_policy: St.PolicyType.AUTOMATIC,
+            hscrollbar_policy: St.PolicyType.NEVER,
+            x_expand: true,
+            visible: false,
+        });
+        this._lyricsList = new St.BoxLayout({
+            style_class: 'mc-lyrics-list',
+            orientation: Clutter.Orientation.VERTICAL,
+            x_expand: true,
+        });
+        this._lyricsScrollView.add_child(this._lyricsList);
+
+        this._lyricsContainer.add_child(this._lyricsCompactBox);
+        this._lyricsContainer.add_child(this._lyricsScrollView);
+        this.add_child(this._lyricsContainer);
+    }
+
 
     _buildSeekBar() {
         this._seekBox = new St.BoxLayout({
@@ -566,16 +653,198 @@ export const MediaCard = GObject.registerClass({
         this._player = player;
 
         if (player) {
-            this._playerSignals.push(player.connect('changed', () => this.sync()));
+            this._playerSignals.push(player.connect('changed', () => {
+                this.sync();
+                this._fetchLyrics();
+            }));
             this._playerSignals.push(player.connect('seeked', (_p, position) => {
                 this._position = position;
                 this._updateSlider();
             }));
+            this._fetchLyrics();
+        } else {
+            this._lyricsData = null;
+            this._syncLyrics();
         }
 
         this._currentArtUrl = null;
         this.sync();
         this._refreshPosition();
+    }
+
+    _fetchLyrics() {
+        if (!this._player || !this._player.title) {
+            this._lyricsData = null;
+            this._syncLyrics();
+            return;
+        }
+
+        this._lyricsManager.resolve(this._player).then(lyricsData => {
+            if (this._player) {
+                this._lyricsData = lyricsData;
+                this._syncLyrics();
+                this._updateLyricsActive(Math.round(this._position / 1000));
+            }
+        });
+    }
+
+    _toggleLyricsView() {
+        this._lyricsExpanded = !this._lyricsExpanded;
+        this._lyricsScrollView.visible = this._lyricsExpanded;
+        this._lyricsCompactBox.visible = !this._lyricsExpanded;
+
+        if (this._lyricsExpanded) {
+            this._lyricsButton.add_style_class_name('mc-lyrics-toggle-active');
+            if (this._activeLyricIndex >= 0 && this._lyricsLineActors[this._activeLyricIndex])
+                this._scrollLyricsToActive(this._lyricsLineActors[this._activeLyricIndex]);
+        } else {
+            this._lyricsButton.remove_style_class_name('mc-lyrics-toggle-active');
+        }
+    }
+
+    _syncLyrics() {
+        const showLyricsInCard = this._settings.get_boolean('show-lyrics-in-card');
+        const showLyricsButton = this._settings.get_boolean('card-show-lyrics-button');
+        const hasLyrics = this._lyricsData && (this._lyricsData.synced || this._lyricsData.plainLyrics);
+
+        this._lyricsContainer.visible = showLyricsInCard && !!hasLyrics && !!this._player;
+        this._lyricsButton.visible = showLyricsInCard && showLyricsButton && !!hasLyrics && !!this._player;
+
+        if (!this._lyricsContainer.visible) {
+            this._clearLyricsLines();
+            return;
+        }
+
+        this._rebuildLyricsLines();
+    }
+
+    _clearLyricsLines() {
+        this._lyricsList.destroy_all_children();
+        this._lyricsLineActors = [];
+        this._activeLyricIndex = -1;
+    }
+
+    _rebuildLyricsLines() {
+        this._clearLyricsLines();
+        if (!this._lyricsData)
+            return;
+
+        const lines = this._lyricsData.lines;
+        if (this._lyricsData.synced && lines.length > 0) {
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const btn = new St.Button({
+                    style_class: 'mc-lyrics-line',
+                    can_focus: true,
+                    x_expand: true,
+                });
+                const label = new St.Label({
+                    style_class: 'mc-lyrics-line-text',
+                    text: line.text || '♪',
+                    x_expand: true,
+                });
+                label.clutter_text.line_wrap = true;
+                label.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
+                label.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
+                if (line.isRTL)
+                    label.clutter_text.set_text_direction(Clutter.TextDirection.RTL);
+
+                btn.set_child(label);
+                const seekPos = line.timeMs * 1000;
+                btn.connect('clicked', () => {
+                    if (this._player && this._player.canSeek) {
+                        this._player.setPosition(seekPos);
+                        this._refreshPosition();
+                    }
+                });
+
+                this._lyricsList.add_child(btn);
+                this._lyricsLineActors.push(btn);
+            }
+        } else if (this._lyricsData.plainLyrics) {
+            const raw = this._lyricsData.plainLyrics.split(/\r?\n/).filter(l => l.trim().length > 0);
+            for (const text of raw) {
+                const label = new St.Label({
+                    style_class: 'mc-lyrics-line-plain',
+                    text,
+                    x_expand: true,
+                });
+                label.clutter_text.line_wrap = true;
+                label.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
+                this._lyricsList.add_child(label);
+            }
+        }
+    }
+
+    _updateLyricsActive(positionMs) {
+        if (!this._lyricsContainer.visible || !this._lyricsData || !this._lyricsData.synced)
+            return;
+
+        const activeInfo = this._lyricsData.getActiveLine(positionMs);
+        const activeIndex = activeInfo ? activeInfo.index : -1;
+
+        /* Update compact single-line label */
+        if (activeInfo?.text)
+            this._lyricsCompactLabel.text = activeInfo.text;
+        else if (activeInfo?.isIntro)
+            this._lyricsCompactLabel.text = '♪ ♫ ♪';
+        else
+            this._lyricsCompactLabel.text = '';
+
+        /* Update full scroll view line highlights */
+        if (this._lyricsExpanded && this._lyricsLineActors.length > 0) {
+            if (this._activeLyricIndex !== activeIndex) {
+                this._activeLyricIndex = activeIndex;
+
+                for (let i = 0; i < this._lyricsLineActors.length; i++) {
+                    const actor = this._lyricsLineActors[i];
+                    if (i === activeIndex) {
+                        actor.add_style_class_name('mc-lyrics-line-active');
+                        actor.remove_style_class_name('mc-lyrics-line-past');
+                    } else if (i < activeIndex) {
+                        actor.remove_style_class_name('mc-lyrics-line-active');
+                        actor.add_style_class_name('mc-lyrics-line-past');
+                    } else {
+                        actor.remove_style_class_name('mc-lyrics-line-active');
+                        actor.remove_style_class_name('mc-lyrics-line-past');
+                    }
+                }
+
+                if (this._settings.get_boolean('lyrics-auto-scroll') && activeIndex >= 0) {
+                    const activeActor = this._lyricsLineActors[activeIndex];
+                    if (activeActor)
+                        this._scrollLyricsToActive(activeActor);
+                }
+            }
+        }
+    }
+
+    _scrollLyricsToActive(activeActor) {
+        if (!activeActor || !this._lyricsScrollView.visible)
+            return;
+
+        const vadjustment = this._lyricsScrollView.vscroll?.adjustment;
+        if (!vadjustment)
+            return;
+
+        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            if (!this._lyricsScrollView.visible)
+                return GLib.SOURCE_REMOVE;
+
+            const [success, box] = activeActor.get_allocation_box();
+            if (!success)
+                return GLib.SOURCE_REMOVE;
+
+            const actorY = box.y1;
+            const actorHeight = box.y2 - box.y1;
+            const scrollHeight = this._lyricsScrollView.height || 160;
+
+            const targetY = actorY - (scrollHeight / 2) + (actorHeight / 2);
+            vadjustment.value = Math.max(vadjustment.lower,
+                Math.min(targetY, vadjustment.upper - vadjustment.page_size));
+
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     _disconnectPlayer() {
@@ -637,7 +906,9 @@ export const MediaCard = GObject.registerClass({
             : 0;
         this._slider.value = fraction;
         this._updateTimeLabels(this._position);
+        this._updateLyricsActive(Math.round(this._position / 1000));
     }
+
 
     _updateTimeLabels(position, length = this._length) {
         this._positionLabel.text = formatTime(position);
@@ -721,6 +992,10 @@ export const MediaCard = GObject.registerClass({
             this._equalizer.visible = false;
             this._equalizer.setPlaying(false);
             this._length = 0;
+            this._lyricsData = null;
+            this._clearLyricsLines();
+            this._lyricsContainer.visible = false;
+            this._lyricsButton.visible = false;
             this._updateArt();
             this._updateTimer();
             return;
@@ -771,6 +1046,7 @@ export const MediaCard = GObject.registerClass({
         setToggleStyle(this._loopButton,
             player.canLoop && player.loopStatus !== 'None');
 
+        this._syncLyrics();
         this._updateArt();
         this._updateSlider();
         this._updateTimer();
@@ -810,6 +1086,13 @@ export const MediaCard = GObject.registerClass({
             GLib.Source.remove(this._seekRefreshId);
             this._seekRefreshId = 0;
         }
+        if (this._lyricsSignalId) {
+            this._lyricsManager.disconnect(this._lyricsSignalId);
+            this._lyricsSignalId = 0;
+        }
+        this._lyricsData = null;
+        this._clearLyricsLines();
+
         this._disconnectPlayer();
         for (const id of this._settingsSignals)
             this._settings.disconnect(id);
@@ -820,3 +1103,4 @@ export const MediaCard = GObject.registerClass({
         this._roster = [];
     }
 });
+

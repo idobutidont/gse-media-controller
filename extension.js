@@ -1,7 +1,5 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
-/* extension.js */
-
 import Clutter from 'gi://Clutter';
+import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 
@@ -11,6 +9,7 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {ArtCache} from './artCache.js';
+import {LyricsManager} from './lyrics.js';
 import {MediaCard} from './mediaCard.js';
 import {MprisManager} from './mpris.js';
 import {ScrollingLabel} from './scrollingLabel.js';
@@ -42,6 +41,7 @@ const PANEL_KEYS = [
     'show-player-icon',
     'show-title',
     'show-artist',
+    'show-lyrics-in-panel',
     'panel-text-width',
     'scroll-text',
     'scroll-speed',
@@ -53,12 +53,19 @@ const PANEL_KEYS = [
 
 const MediaIndicator = GObject.registerClass(
 class MediaIndicator extends PanelMenu.Button {
-    _init(extension, settings, artCache, manager) {
+    _init(extension, settings, artCache, lyricsManager, manager) {
         super._init(0.5, 'Media Controls');
 
         this._settings = settings;
+        this._lyricsManager = lyricsManager;
         this._manager = manager;
         this._orderApplied = null;
+        this._lyricsData = null;
+        this._lastPositionMicros = 0;
+        this._lastMonotonicTime = 0;
+        this._lastPositionSyncTime = 0;
+        this._lyricsTimerId = 0;
+        this._seekedSignalId = 0;
         this._readSettings();
 
         this.add_style_class_name('mc-panel-button');
@@ -75,17 +82,24 @@ class MediaIndicator extends PanelMenu.Button {
         this._buildTextBox();
         this._buildControls();
 
-        this._card = new MediaCard(artCache, settings);
+        this._card = new MediaCard(artCache, lyricsManager, settings);
         this._card.connectObject(
             'activated', () => this.menu.close(),
             'open-preferences', () => {
                 this.menu.close();
-                extension.openPreferences();
+                try {
+                    const promise = extension.openPreferences();
+                    if (promise?.catch)
+                        promise.catch(err => console.warn(`media-controls: openPreferences: ${err.message}`));
+                } catch (e) {
+                    console.warn(`media-controls: openPreferences: ${e.message}`);
+                }
             },
             /* The menu deliberately stays open: switching players is something
              * you do to look at the other player. */
             'player-selected', (_card, busName) =>
                 this._manager.selectPlayer(busName), this);
+
 
         this.menu.box.add_style_class_name('mc-card-menu');
         const item = new PopupMenu.PopupBaseMenuItem({
@@ -103,6 +117,14 @@ class MediaIndicator extends PanelMenu.Button {
                 this._card.sync();
         }, this);
 
+        this._lyricsManager.connectObject('lyrics-loaded', (_m, key) => {
+            const player = this._manager.activePlayer;
+            if (player && this._lyricsManager.trackKey(player.artist, player.title) === key) {
+                this._lyricsData = this._lyricsManager.currentLyrics;
+                this._updatePanelDisplay();
+            }
+        }, this);
+
         this._manager.connectObject(
             'changed', () => this.sync(),
             /* A player appearing or leaving changes the switcher even when the
@@ -117,8 +139,11 @@ class MediaIndicator extends PanelMenu.Button {
             ...PANEL_KEYS.flatMap(key => [`changed::${key}`, onPanelKeyChanged]),
             this);
 
+        this.connect('destroy', () => this._onDestroy());
+
         this.sync();
     }
+
 
     /**
      * sync() runs on every D-Bus property change — several times a second for
@@ -139,6 +164,7 @@ class MediaIndicator extends PanelMenu.Button {
             showPlayerIcon: settings.get_boolean('show-player-icon'),
             showTitle: settings.get_boolean('show-title'),
             showArtist: settings.get_boolean('show-artist'),
+            showLyricsInPanel: settings.get_boolean('show-lyrics-in-panel'),
             textWidth: settings.get_int('panel-text-width'),
             scrollText: settings.get_boolean('scroll-text'),
             scrollSpeed: settings.get_int('scroll-speed'),
@@ -298,15 +324,110 @@ class MediaIndicator extends PanelMenu.Button {
         return parts.join(' · ');
     }
 
+    _updatePanelDisplay(positionMs = null) {
+        const player = this._manager.activePlayer;
+        if (!player)
+            return;
+
+        const prefs = this._prefs;
+        const textFallback = this._panelText(player);
+
+        if (!prefs.showLyricsInPanel || !this._lyricsData || !this._lyricsData.synced || this._lyricsData.lines.length === 0) {
+            this._label.setText(textFallback);
+            this._label.visible = textFallback.length > 0;
+            return;
+        }
+
+        if (positionMs === null) {
+            const now = GLib.get_monotonic_time();
+            const elapsedMicros = player.isPlaying ? (now - this._lastMonotonicTime) : 0;
+            const currentPosMicros = Math.max(0, this._lastPositionMicros + elapsedMicros);
+            positionMs = Math.round(currentPosMicros / 1000);
+        }
+
+        const active = this._lyricsData.getActiveLine(positionMs);
+        let displayText = textFallback;
+
+        if (active?.text)
+            displayText = active.text;
+        else if (active?.isIntro || active?.isOutro)
+            displayText = textFallback;
+
+        this._label.setText(displayText);
+        this._label.visible = displayText.length > 0;
+    }
+
+    _updateLyricsTimer() {
+        const player = this._manager.activePlayer;
+        const wanted = player?.isPlaying && this._prefs.showLyricsInPanel &&
+            this._lyricsData && this._lyricsData.synced;
+
+        if (wanted && !this._lyricsTimerId) {
+            this._lyricsTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
+                const activePlayer = this._manager.activePlayer;
+                if (!activePlayer || !activePlayer.isPlaying) {
+                    this._lyricsTimerId = 0;
+                    return GLib.SOURCE_REMOVE;
+                }
+
+                const now = GLib.get_monotonic_time();
+
+                /* Periodic background D-Bus position resync to prevent drift */
+                if (now - this._lastPositionSyncTime > 1500000) {
+                    this._lastPositionSyncTime = now;
+                    activePlayer.getPosition().then(pos => {
+                        if (this._manager.activePlayer === activePlayer) {
+                            this._lastPositionMicros = pos;
+                            this._lastMonotonicTime = GLib.get_monotonic_time();
+                        }
+                    });
+                }
+
+                const elapsedMicros = now - this._lastMonotonicTime;
+                const currentPosMicros = Math.max(0, this._lastPositionMicros + elapsedMicros);
+                this._updatePanelDisplay(Math.round(currentPosMicros / 1000));
+
+                return GLib.SOURCE_CONTINUE;
+            });
+        } else if (!wanted && this._lyricsTimerId) {
+            GLib.Source.remove(this._lyricsTimerId);
+            this._lyricsTimerId = 0;
+        }
+    }
+
+    _trackPlayer(player) {
+        if (this._trackedPlayer === player)
+            return;
+
+        if (this._trackedPlayer && this._seekedSignalId) {
+            this._trackedPlayer.disconnect(this._seekedSignalId);
+            this._seekedSignalId = 0;
+        }
+
+        this._trackedPlayer = player;
+        if (player) {
+            this._seekedSignalId = player.connect('seeked', (_p, position) => {
+                this._lastPositionMicros = position;
+                this._lastMonotonicTime = GLib.get_monotonic_time();
+                this._updatePanelDisplay(Math.round(position / 1000));
+            });
+        }
+    }
+
     sync() {
         const player = this._manager.activePlayer;
         const prefs = this._prefs;
         this._card.setPlayer(player);
-        /* Only players whose proxy has landed: a tab for one that cannot be
-         * controlled yet would do nothing when pressed. */
         this._card.setPlayers(this._manager.readyPlayers, player);
+        this._trackPlayer(player);
 
         if (!player) {
+            this._lyricsData = null;
+            if (this._lyricsTimerId) {
+                GLib.Source.remove(this._lyricsTimerId);
+                this._lyricsTimerId = 0;
+            }
+
             /* Drop the text before hiding: a scrolling label left with content
              * keeps its animation running against an actor nobody can see. */
             this._label.setText('');
@@ -331,12 +452,30 @@ class MediaIndicator extends PanelMenu.Button {
 
         this.container.visible = true;
 
-        const text = this._panelText(player);
         this._label.setWidth(prefs.textWidth);
         this._label.setScrolling(prefs.scrollText, prefs.scrollSpeed,
             prefs.scrollRightToLeft, prefs.scrollLoop);
-        this._label.setText(text);
-        this._label.visible = text.length > 0;
+
+        /* Refresh position and lyrics */
+        player.getPosition().then(position => {
+            if (this._manager.activePlayer === player) {
+                this._lastPositionMicros = position;
+                this._lastMonotonicTime = GLib.get_monotonic_time();
+                this._lastPositionSyncTime = this._lastMonotonicTime;
+                this._updatePanelDisplay(Math.round(position / 1000));
+            }
+        });
+
+        this._lyricsManager.resolve(player).then(lyricsData => {
+            if (this._manager.activePlayer === player) {
+                this._lyricsData = lyricsData;
+                this._updatePanelDisplay();
+                this._updateLyricsTimer();
+            }
+        });
+
+        this._updatePanelDisplay();
+        this._updateLyricsTimer();
 
         this._playerIcon.visible = prefs.showPlayerIcon;
         if (this._playerIcon.visible)
@@ -390,17 +529,28 @@ class MediaIndicator extends PanelMenu.Button {
         this._box.set_child_at_index(this._controlsBox, controlsFirst ? 0 : 1);
     }
 
-    /* No destroy() override: every connection above is owned by `this`, so the
-     * signal tracker disconnects them all when the actor is destroyed. */
+    _onDestroy() {
+        if (this._lyricsTimerId) {
+            GLib.Source.remove(this._lyricsTimerId);
+            this._lyricsTimerId = 0;
+        }
+        if (this._trackedPlayer && this._seekedSignalId) {
+            this._trackedPlayer.disconnect(this._seekedSignalId);
+            this._seekedSignalId = 0;
+        }
+        this._trackedPlayer = null;
+        this._lyricsData = null;
+    }
 });
 
 export default class MediaControlsExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
         this._artCache = new ArtCache();
+        this._lyricsManager = new LyricsManager();
         this._manager = new MprisManager();
         this._applyExclusivePlayback();
-        this._indicator = new MediaIndicator(this, this._settings, this._artCache, this._manager);
+        this._indicator = new MediaIndicator(this, this._settings, this._artCache, this._lyricsManager, this._manager);
 
         const {box, index} = this._placement();
         Main.panel.addToStatusArea(ROLE, this._indicator, index, box);
@@ -468,9 +618,13 @@ export default class MediaControlsExtension extends Extension {
         this._manager?.destroy();
         this._manager = null;
 
+        this._lyricsManager?.destroy();
+        this._lyricsManager = null;
+
         this._artCache?.destroy();
         this._artCache = null;
 
         this._settings = null;
     }
 }
+

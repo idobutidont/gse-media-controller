@@ -257,3 +257,104 @@
 .mc-mode-on StIcon {
   color: -st-accent-color;
 }
+
+/* ---------- Live Lyrics ---------- */
+
+.mc-lyrics-toggle-button {
+  border-radius: 99px;
+  padding: 6px;
+}
+
+.mc-lyrics-toggle-active {
+  background-color: rgba(127, 127, 127, 0.35);
+  color: -st-accent-color;
+}
+
+.mc-lyrics-container {
+  spacing: 8px;
+  padding: 2px 0;
+}
+
+/* Compact live lyric bar */
+.mc-lyrics-compact {
+  border-radius: 12px;
+  padding: 6px 10px;
+  background-color: rgba(127, 127, 127, 0.12);
+  transition-duration: 200ms;
+}
+
+.mc-lyrics-compact:hover {
+  background-color: rgba(127, 127, 127, 0.22);
+}
+
+.mc-lyrics-compact:active {
+  background-color: rgba(127, 127, 127, 0.32);
+}
+
+.mc-lyrics-compact-inner {
+  spacing: 8px;
+}
+
+.mc-lyrics-icon {
+  color: -st-accent-color;
+  opacity: 0.9;
+}
+
+.mc-lyrics-compact-text {
+  font-weight: 600;
+  font-size: 0.9em;
+  color: #ffffff;
+}
+
+/* Full scrollable synced lyrics list */
+.mc-lyrics-scroll-view {
+  max-height: 180px;
+  border-radius: 14px;
+  background-color: rgba(0, 0, 0, 0.25);
+  padding: 8px;
+}
+
+.mc-lyrics-list {
+  spacing: 6px;
+  padding: 4px 0;
+}
+
+.mc-lyrics-line {
+  border-radius: 8px;
+  padding: 4px 8px;
+  text-align: left;
+  transition-duration: 150ms;
+}
+
+.mc-lyrics-line:hover {
+  background-color: rgba(127, 127, 127, 0.15);
+}
+
+.mc-lyrics-line-text {
+  font-size: 0.9em;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 500;
+  text-align: left;
+}
+
+.mc-lyrics-line-active .mc-lyrics-line-text {
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 1.02em;
+}
+
+.mc-lyrics-line-active {
+  background-color: rgba(127, 127, 127, 0.25);
+}
+
+.mc-lyrics-line-past .mc-lyrics-line-text {
+  color: rgba(255, 255, 255, 0.35);
+  font-weight: 400;
+}
+
+.mc-lyrics-line-plain {
+  padding: 3px 8px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.9em;
+}
+

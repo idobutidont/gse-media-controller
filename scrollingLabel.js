@@ -17,8 +17,10 @@ import St from 'gi://St';
  * the title running straight into itself. */
 const GAP = 32;
 
-/* Long enough to read the beginning of the title before it moves off. */
-const PAUSE_MS = 1200;
+/* Responsive pause before scrolling starts, giving enough time to read the start
+ * of a line or title while keeping dynamic lyrics readable before line changes. */
+const PAUSE_MS = 900;
+
 
 export const ScrollingLabel = GObject.registerClass(
 class ScrollingLabel extends St.Widget {

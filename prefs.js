@@ -9,7 +9,7 @@ import Gtk from 'gi://Gtk';
 import {ExtensionPreferences, gettext as _} from
     'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
-import {artCacheDir} from './paths.js';
+import {artCacheDir, lyricsCacheDir} from './paths.js';
 
 /* Enumerating in batches keeps a large cache off the main loop in one gulp. */
 const ENUMERATE_BATCH = 64;
@@ -141,6 +141,15 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
             _('Cycles between off, the whole queue, and one track. Requires a player that supports looping.')));
         page.add(buttons);
 
+        const lyricsGroup = new Adw.PreferencesGroup({
+            title: _('Live lyrics'),
+            description: _('Synchronized lyrics in the top bar.'),
+        });
+        lyricsGroup.add(this._switchRow(settings, 'show-lyrics-in-panel',
+            _('Show live lyrics in panel'),
+            _('Display current synchronized lyric line in the panel while playing, falling back to track info when unavailable.')));
+        page.add(lyricsGroup);
+
         const text = new Adw.PreferencesGroup({
             title: _('Track information'),
             description: _('What the indicator shows about the current track.'),
@@ -196,6 +205,23 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
             _('Card width'), _('Measured in pixels.'), 400, 560, 10));
         page.add(appearance);
 
+        const cardLyrics = new Adw.PreferencesGroup({
+            title: _('Live lyrics'),
+            description: _('Synchronized lyrics in the now-playing card.'),
+        });
+        cardLyrics.add(this._switchRow(settings, 'show-lyrics-in-card',
+            _('Show live lyrics in card'),
+            _('Display synced lyrics in the card with real-time active line highlighting.')));
+        cardLyrics.add(this._bindSensitive(settings, 'show-lyrics-in-card',
+            this._switchRow(settings, 'card-show-lyrics-button',
+                _('Lyrics toggle button'),
+                _('Show a button in the card header to expand or collapse the full synced lyrics view.'))));
+        cardLyrics.add(this._bindSensitive(settings, 'show-lyrics-in-card',
+            this._switchRow(settings, 'lyrics-auto-scroll',
+                _('Auto-scroll lyrics'),
+                _('Keep the active lyric line centered in the card lyrics view.'))));
+        page.add(cardLyrics);
+
         const multiple = new Adw.PreferencesGroup({
             title: _('Multiple players'),
             description: _('What happens when more than one media player is running.'),
@@ -239,20 +265,39 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
             icon_name: 'applications-utilities-symbolic',
         });
 
-        const cache = new Adw.PreferencesGroup({
+        const artCache = new Adw.PreferencesGroup({
             title: _('Album art cache'),
             description: _('Artwork downloaded from players that publish it over the web is stored on disk so it is not fetched again. Removing it is safe; anything still needed is downloaded once more.'),
         });
 
-        const status = new Adw.ActionRow({title: _('Cached artwork')});
-        cache.add(status);
-        this._refreshCacheStatus(status);
+        const artStatus = new Adw.ActionRow({title: _('Cached artwork')});
+        artCache.add(artStatus);
+        this._refreshDirCacheStatus(artCacheDir(), artStatus);
 
-        const clear = new Adw.ButtonRow({title: _('Clear Cache…')});
-        clear.add_css_class('destructive-action');
-        clear.connect('activated', () => this._onClearCache(window, status));
-        cache.add(clear);
-        page.add(cache);
+        const clearArt = new Adw.ButtonRow({title: _('Clear Art Cache…')});
+        clearArt.add_css_class('destructive-action');
+        clearArt.connect('activated', () => this._onClearDirCache(window, artCacheDir(), artStatus,
+            _('Clear the album art cache?'),
+            _('Every downloaded cover is deleted from disk. Artwork for the tracks you play next is downloaded again.')));
+        artCache.add(clearArt);
+        page.add(artCache);
+
+        const lyricsCache = new Adw.PreferencesGroup({
+            title: _('Lyrics cache'),
+            description: _('Downloaded lyrics from LRCLIB are stored on disk for fast offline access. Removing the cache is safe; lyrics will be fetched on demand.'),
+        });
+
+        const lyricsStatus = new Adw.ActionRow({title: _('Cached lyrics')});
+        lyricsCache.add(lyricsStatus);
+        this._refreshDirCacheStatus(lyricsCacheDir(), lyricsStatus);
+
+        const clearLyrics = new Adw.ButtonRow({title: _('Clear Lyrics Cache…')});
+        clearLyrics.add_css_class('destructive-action');
+        clearLyrics.connect('activated', () => this._onClearDirCache(window, lyricsCacheDir(), lyricsStatus,
+            _('Clear the lyrics cache?'),
+            _('Every downloaded lyric file is deleted from disk. Lyrics for the tracks you play next will be fetched again.')));
+        lyricsCache.add(clearLyrics);
+        page.add(lyricsCache);
 
         const reset = new Adw.PreferencesGroup({
             title: _('Reset'),
@@ -287,20 +332,20 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
     }
 
     /**
-     * Walk the cache directory in batches, handing each Gio.FileInfo to `onInfo`.
-     * A missing directory is not an error: nothing has been cached yet.
+     * Walk a directory in batches, handing each Gio.FileInfo to `onInfo`.
      *
-     * @param {string} attributes the Gio file attributes to request
-     * @param {Function} onInfo called per entry
-     * @param {Function} onDone called once, when the walk finishes
+     * @param {Gio.File} dir
+     * @param {string} attributes
+     * @param {Function} onInfo
+     * @param {Function} onDone
      */
-    _walkCache(attributes, onInfo, onDone) {
-        artCacheDir().enumerate_children_async(
+    _walkDir(dir, attributes, onInfo, onDone) {
+        dir.enumerate_children_async(
             attributes, Gio.FileQueryInfoFlags.NONE, GLib.PRIORITY_DEFAULT, null,
-            (dir, result) => {
+            (sourceDir, result) => {
                 let enumerator;
                 try {
-                    enumerator = dir.enumerate_children_finish(result);
+                    enumerator = sourceDir.enumerate_children_finish(result);
                 } catch {
                     onDone();
                     return;
@@ -329,12 +374,13 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
             });
     }
 
-    _refreshCacheStatus(row) {
+    _refreshDirCacheStatus(dir, row) {
         row.subtitle = _('Measuring…');
 
         let files = 0;
         let bytes = 0;
-        this._walkCache(
+        this._walkDir(
+            dir,
             `${Gio.FILE_ATTRIBUTE_STANDARD_NAME},${Gio.FILE_ATTRIBUTE_STANDARD_SIZE}`,
             info => {
                 files++;
@@ -350,26 +396,20 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
             });
     }
 
-    async _onClearCache(window, status) {
-        const ok = await this._confirm(window,
-            _('Clear the album art cache?'),
-            _('Every downloaded cover is deleted from disk. Artwork for the tracks you play next is downloaded again.'),
-            _('Clear'));
+    async _onClearDirCache(window, dir, status, heading, body) {
+        const ok = await this._confirm(window, heading, body, _('Clear'));
         if (!ok)
             return;
 
         status.subtitle = _('Clearing…');
 
-        const dir = artCacheDir();
         const names = [];
-        this._walkCache(Gio.FILE_ATTRIBUTE_STANDARD_NAME,
+        this._walkDir(dir, Gio.FILE_ATTRIBUTE_STANDARD_NAME,
             info => names.push(info.get_name()),
             () => {
-                /* The extension may be downloading into this directory right now,
-                 * so a file vanishing underneath us is expected, not an error. */
                 let outstanding = names.length;
                 if (outstanding === 0) {
-                    this._refreshCacheStatus(status);
+                    this._refreshDirCacheStatus(dir, status);
                     return;
                 }
 
@@ -379,10 +419,10 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
                             try {
                                 file.delete_finish(result);
                             } catch {
-                                /* Already gone. */
+                                /* Already gone */
                             }
                             if (--outstanding === 0)
-                                this._refreshCacheStatus(status);
+                                this._refreshDirCacheStatus(dir, status);
                         });
                 }
             });
@@ -402,3 +442,4 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
             settings.reset(key);
     }
 }
+

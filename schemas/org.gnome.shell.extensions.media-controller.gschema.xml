@@ -183,5 +183,29 @@
       <summary>Card width in pixels</summary>
     </key>
 
+    <key name="show-lyrics-in-panel" type="b">
+      <default>true</default>
+      <summary>Show live lyrics in the panel</summary>
+      <description>Display synchronized lyrics in the top bar when available for the current track.</description>
+    </key>
+
+    <key name="show-lyrics-in-card" type="b">
+      <default>true</default>
+      <summary>Show live lyrics in the card</summary>
+      <description>Display synchronized lyrics in the popup media card.</description>
+    </key>
+
+    <key name="lyrics-auto-scroll" type="b">
+      <default>true</default>
+      <summary>Auto-scroll lyrics in the card</summary>
+      <description>Keep the current singing lyric line centered in the card's lyrics view.</description>
+    </key>
+
+    <key name="card-show-lyrics-button" type="b">
+      <default>true</default>
+      <summary>Show the lyrics toggle button in the card</summary>
+      <description>Show a button in the card header to toggle the full synced lyrics view.</description>
+    </key>
+
   </schema>
 </schemalist>
