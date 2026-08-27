@@ -308,11 +308,13 @@
 
 /* Full scrollable synced lyrics list */
 .mc-lyrics-scroll-view {
+  height: 180px;
   max-height: 180px;
   border-radius: 14px;
   background-color: rgba(0, 0, 0, 0.25);
   padding: 8px;
 }
+
 
 .mc-lyrics-list {
   spacing: 6px;

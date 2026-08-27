@@ -6,7 +6,9 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
-import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
+import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
+
+
 
 import {ArtCache} from './artCache.js';
 import {LyricsManager} from './lyrics.js';
@@ -451,11 +453,12 @@ class MediaIndicator extends PanelMenu.Button {
             this.container.visible = true;
             if (prefs.keepIdleWidth) {
                 this._label.setWidth(prefs.textWidth);
-                this._label.setText('', false);
+                this._label.setText(_('No player'), false);
                 this._label.visible = true;
             } else {
                 this._label.visible = false;
             }
+
 
             this._playerIcon.icon_name = 'audio-x-generic-symbolic';
             this._playerIcon.visible = true;

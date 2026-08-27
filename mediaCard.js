@@ -456,9 +456,14 @@ export const MediaCard = GObject.registerClass({
             style_class: 'mc-lyrics-scroll-view',
             vscrollbar_policy: St.PolicyType.AUTOMATIC,
             hscrollbar_policy: St.PolicyType.NEVER,
+            enable_mouse_scrolling: true,
             x_expand: true,
+            y_expand: false,
+            height: 180,
             visible: false,
         });
+        this._lyricsScrollView.set_height(180);
+
         this._lyricsList = new St.BoxLayout({
             style_class: 'mc-lyrics-list',
             orientation: Clutter.Orientation.VERTICAL,
@@ -470,6 +475,7 @@ export const MediaCard = GObject.registerClass({
         this._lyricsContainer.add_child(this._lyricsScrollView);
         this.add_child(this._lyricsContainer);
     }
+
 
 
     _buildSeekBar() {
@@ -695,6 +701,7 @@ export const MediaCard = GObject.registerClass({
 
         if (this._lyricsExpanded) {
             this._lyricsButton.add_style_class_name('mc-lyrics-toggle-active');
+            this._updateLyricsActive(Math.round(this._position / 1000));
             if (this._activeLyricIndex >= 0 && this._lyricsLineActors[this._activeLyricIndex])
                 this._scrollLyricsToActive(this._lyricsLineActors[this._activeLyricIndex]);
         } else {
@@ -832,43 +839,42 @@ export const MediaCard = GObject.registerClass({
             if (!this._lyricsScrollView?.visible)
                 return GLib.SOURCE_REMOVE;
 
-            let actorY = 0;
-            let actorHeight = 32;
+            const adjustment = this._lyricsScrollView.vadjustment ??
+                this._lyricsScrollView.get_vscroll_bar()?.get_adjustment();
+            if (!adjustment)
+                return GLib.SOURCE_REMOVE;
 
-            const [success, box] = activeActor.get_allocation_box();
-            if (success && (box.y2 - box.y1) > 0) {
-                actorY = box.y1;
-                actorHeight = box.y2 - box.y1;
-            } else {
-                const index = this._lyricsLineActors.indexOf(activeActor);
-                if (index > 0) {
-                    for (let i = 0; i < index; i++) {
-                        const [, siblingBox] = this._lyricsLineActors[i].get_allocation_box();
-                        actorY += (siblingBox.y2 - siblingBox.y1) || 30;
-                    }
-                }
+            const index = this._lyricsLineActors.indexOf(activeActor);
+            if (index < 0)
+                return GLib.SOURCE_REMOVE;
+
+            let actorY = 0;
+            for (let i = 0; i < index; i++) {
+                const sibling = this._lyricsLineActors[i];
+                const h = sibling.height > 0 ? sibling.height : sibling.get_preferred_height(-1)[1];
+                actorY += (h || 28) + 6;
             }
 
+            const actorHeight = activeActor.height > 0 ? activeActor.height : activeActor.get_preferred_height(-1)[1];
             const scrollHeight = this._lyricsScrollView.height ||
                 this._lyricsScrollView.get_height() || 180;
 
-            const targetY = actorY - (scrollHeight / 2) + (actorHeight / 2);
-            const clampedY = Math.max(vadjustment.lower,
-                Math.min(targetY, vadjustment.upper - vadjustment.page_size));
+            const targetY = actorY - (scrollHeight / 2) + ((actorHeight || 28) / 2);
+            const maxScroll = Math.max(adjustment.lower, adjustment.upper - adjustment.page_size);
+            const clampedY = Math.max(adjustment.lower, Math.min(targetY, maxScroll));
 
             try {
-                vadjustment.ease(clampedY, {
-                    duration: 300,
+                adjustment.ease(clampedY, {
+                    duration: 350,
                     mode: Clutter.AnimationMode.EASE_OUT_QUAD,
                 });
             } catch {
-                vadjustment.value = clampedY;
+                adjustment.value = clampedY;
             }
 
             return GLib.SOURCE_REMOVE;
         });
     }
-
 
     _disconnectPlayer() {
         if (this._player) {
@@ -887,10 +893,10 @@ export const MediaCard = GObject.registerClass({
             this._refreshPosition();
     }
 
-    /* Polling exists to move the seek bar. No seek bar on screen, no polling —
-     * every tick is a D-Bus round trip. */
+    /* Polling exists to move the seek bar and lyrics. */
     _updateTimer() {
-        const wanted = this._active && this._seekBox.visible &&
+        const wanted = this._active &&
+            (this._seekBox.visible || this._lyricsContainer.visible) &&
             this._player?.isPlaying;
 
         if (wanted && !this._timeoutId) {
@@ -904,6 +910,7 @@ export const MediaCard = GObject.registerClass({
             this._timeoutId = 0;
         }
     }
+
 
     _refreshPosition() {
         const player = this._player;
