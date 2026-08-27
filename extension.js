@@ -43,6 +43,7 @@ const PANEL_KEYS = [
     'show-artist',
     'show-lyrics-in-panel',
     'panel-text-width',
+    'keep-panel-width-when-idle',
     'scroll-text',
     'scroll-speed',
     'scroll-direction',
@@ -50,6 +51,7 @@ const PANEL_KEYS = [
     'hide-when-inactive',
     'controls-on-left',
 ];
+
 
 const MediaIndicator = GObject.registerClass(
 class MediaIndicator extends PanelMenu.Button {
@@ -166,6 +168,7 @@ class MediaIndicator extends PanelMenu.Button {
             showArtist: settings.get_boolean('show-artist'),
             showLyricsInPanel: settings.get_boolean('show-lyrics-in-panel'),
             textWidth: settings.get_int('panel-text-width'),
+            keepIdleWidth: settings.get_boolean('keep-panel-width-when-idle'),
             scrollText: settings.get_boolean('scroll-text'),
             scrollSpeed: settings.get_int('scroll-speed'),
             scrollRightToLeft: settings.get_string('scroll-direction') === 'right-to-left',
@@ -174,6 +177,7 @@ class MediaIndicator extends PanelMenu.Button {
             controlsOnLeft: settings.get_boolean('controls-on-left'),
         };
     }
+
 
     /**
      * PanelMenu.Button opens its menu from a Clutter.ClickGesture that
@@ -333,7 +337,7 @@ class MediaIndicator extends PanelMenu.Button {
         const textFallback = this._panelText(player);
 
         if (!prefs.showLyricsInPanel || !this._lyricsData || !this._lyricsData.synced || this._lyricsData.lines.length === 0) {
-            this._label.setText(textFallback);
+            this._label.setText(textFallback, false);
             this._label.visible = textFallback.length > 0;
             return;
         }
@@ -347,13 +351,17 @@ class MediaIndicator extends PanelMenu.Button {
 
         const active = this._lyricsData.getActiveLine(positionMs);
         let displayText = textFallback;
+        let isLyric = false;
 
-        if (active?.text)
+        if (active?.text) {
             displayText = active.text;
-        else if (active?.isIntro || active?.isOutro)
+            isLyric = true;
+        } else if (active?.isIntro || active?.isOutro) {
             displayText = textFallback;
+            isLyric = false;
+        }
 
-        this._label.setText(displayText);
+        this._label.setText(displayText, isLyric);
         this._label.visible = displayText.length > 0;
     }
 
@@ -430,7 +438,7 @@ class MediaIndicator extends PanelMenu.Button {
 
             /* Drop the text before hiding: a scrolling label left with content
              * keeps its animation running against an actor nobody can see. */
-            this._label.setText('');
+            this._label.setText('', false);
 
             if (prefs.hideWhenInactive) {
                 if (this.menu.isOpen)
@@ -439,9 +447,16 @@ class MediaIndicator extends PanelMenu.Button {
                 return;
             }
 
-            /* Idle placeholder: just the generic media icon, no controls. */
+            /* Idle placeholder */
             this.container.visible = true;
-            this._label.visible = false;
+            if (prefs.keepIdleWidth) {
+                this._label.setWidth(prefs.textWidth);
+                this._label.setText('', false);
+                this._label.visible = true;
+            } else {
+                this._label.visible = false;
+            }
+
             this._playerIcon.icon_name = 'audio-x-generic-symbolic';
             this._playerIcon.visible = true;
             this._textBox.visible = true;
@@ -449,6 +464,7 @@ class MediaIndicator extends PanelMenu.Button {
             this._applyOrder();
             return;
         }
+
 
         this.container.visible = true;
 

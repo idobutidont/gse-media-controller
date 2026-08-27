@@ -820,32 +820,55 @@ export const MediaCard = GObject.registerClass({
     }
 
     _scrollLyricsToActive(activeActor) {
-        if (!activeActor || !this._lyricsScrollView.visible)
+        if (!activeActor || !this._lyricsScrollView?.visible)
             return;
 
-        const vadjustment = this._lyricsScrollView.vscroll?.adjustment;
+        const vadjustment = this._lyricsScrollView.vadjustment ??
+            this._lyricsScrollView.get_vscroll_bar()?.get_adjustment();
         if (!vadjustment)
             return;
 
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-            if (!this._lyricsScrollView.visible)
+            if (!this._lyricsScrollView?.visible)
                 return GLib.SOURCE_REMOVE;
+
+            let actorY = 0;
+            let actorHeight = 32;
 
             const [success, box] = activeActor.get_allocation_box();
-            if (!success)
-                return GLib.SOURCE_REMOVE;
+            if (success && (box.y2 - box.y1) > 0) {
+                actorY = box.y1;
+                actorHeight = box.y2 - box.y1;
+            } else {
+                const index = this._lyricsLineActors.indexOf(activeActor);
+                if (index > 0) {
+                    for (let i = 0; i < index; i++) {
+                        const [, siblingBox] = this._lyricsLineActors[i].get_allocation_box();
+                        actorY += (siblingBox.y2 - siblingBox.y1) || 30;
+                    }
+                }
+            }
 
-            const actorY = box.y1;
-            const actorHeight = box.y2 - box.y1;
-            const scrollHeight = this._lyricsScrollView.height || 160;
+            const scrollHeight = this._lyricsScrollView.height ||
+                this._lyricsScrollView.get_height() || 180;
 
             const targetY = actorY - (scrollHeight / 2) + (actorHeight / 2);
-            vadjustment.value = Math.max(vadjustment.lower,
+            const clampedY = Math.max(vadjustment.lower,
                 Math.min(targetY, vadjustment.upper - vadjustment.page_size));
+
+            try {
+                vadjustment.ease(clampedY, {
+                    duration: 300,
+                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                });
+            } catch {
+                vadjustment.value = clampedY;
+            }
 
             return GLib.SOURCE_REMOVE;
         });
     }
+
 
     _disconnectPlayer() {
         if (this._player) {

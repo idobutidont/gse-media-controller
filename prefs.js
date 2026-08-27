@@ -117,7 +117,11 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         placement.add(this._switchRow(settings, 'hide-when-inactive',
             _('Hide when nothing is playing'),
             _('Remove the indicator from the panel while no media player is running.')));
+        placement.add(this._switchRow(settings, 'keep-panel-width-when-idle',
+            _('Keep text width when nothing is playing'),
+            _('Preserve the reserved width in the top panel while idle so neighboring indicators do not shift around.')));
         page.add(placement);
+
 
         /* Listed in the order they appear on screen. */
         const buttons = new Adw.PreferencesGroup({

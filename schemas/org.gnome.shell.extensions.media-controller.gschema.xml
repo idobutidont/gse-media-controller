@@ -207,5 +207,11 @@
       <description>Show a button in the card header to toggle the full synced lyrics view.</description>
     </key>
 
+    <key name="keep-panel-width-when-idle" type="b">
+      <default>false</default>
+      <summary>Keep panel text width when idle</summary>
+      <description>Preserve the reserved panel text width in the top bar even when nothing is playing, preventing neighboring panel items from shifting.</description>
+    </key>
+
   </schema>
 </schemalist>

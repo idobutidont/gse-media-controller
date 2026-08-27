@@ -388,12 +388,26 @@ export const LyricsManager = GObject.registerClass({
             const searchRes = await this._httpGet(searchUrl);
 
             if (Array.isArray(searchRes) && searchRes.length > 0) {
-                /* Prefer results with syncedLyrics */
-                const withSynced = searchRes.find(item => item.syncedLyrics);
-                if (withSynced)
-                    return withSynced;
-                return searchRes[0];
+                /* Filter candidates with synced lyrics, falling back to all candidates */
+                const withSynced = searchRes.filter(item => item.syncedLyrics);
+                const candidates = withSynced.length > 0 ? withSynced : searchRes;
+
+                /* When track length is known, prioritize the closest duration match */
+                if (durationSeconds > 0) {
+                    candidates.sort((a, b) => {
+                        const diffA = Math.abs((a.duration || 0) - durationSeconds);
+                        const diffB = Math.abs((b.duration || 0) - durationSeconds);
+                        return diffA - diffB;
+                    });
+
+                    /* If the closest candidate is within 10s tolerance, use it */
+                    if (Math.abs((candidates[0].duration || 0) - durationSeconds) <= 10)
+                        return candidates[0];
+                }
+
+                return candidates[0];
             }
+
 
             return null;
         } catch (e) {

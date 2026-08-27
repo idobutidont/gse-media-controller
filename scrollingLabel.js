@@ -34,6 +34,7 @@ class ScrollingLabel extends St.Widget {
         });
 
         this._text = '';
+        this._isLyric = false;
         this._width = 200;
         this._scrolling = false;
         this._speed = 30;
@@ -64,11 +65,15 @@ class ScrollingLabel extends St.Widget {
         this.connect('destroy', () => this._onDestroy());
     }
 
-    /** @param {string} text */
-    setText(text) {
-        if (text === this._text)
+    /**
+     * @param {string} text
+     * @param {boolean} isLyric when true, scrolls once to reveal the full line and stops at the end
+     */
+    setText(text, isLyric = false) {
+        if (text === this._text && isLyric === this._isLyric)
             return;
         this._text = text;
+        this._isLyric = isLyric;
         this._update(true);
     }
 
@@ -113,6 +118,34 @@ class ScrollingLabel extends St.Widget {
             return;
         }
 
+        /* Lyric mode: single-pass scroll to reveal the line, then hold at the end */
+        if (this._isLyric) {
+            const distance = fullWidth - this._width;
+            if (!force && this._distance === distance)
+                return;
+
+            this._stop();
+            this._first.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
+            this._first.set_width(-1);
+            this._second.visible = false;
+            this._distance = distance;
+
+            if (!St.Settings.get().enable_animations) {
+                this._showStatic();
+                return;
+            }
+
+            this._box.translation_x = 0;
+            this._box.ease({
+                translation_x: -distance,
+                duration: (distance / Math.max(1, this._speed)) * 1000,
+                delay: PAUSE_MS,
+                mode: Clutter.AnimationMode.LINEAR,
+            });
+            return;
+        }
+
+        /* Standard track title carousel mode */
         const distance = fullWidth + GAP;
         /* A style-changed that did not actually move anything must not restart
          * the animation, or the title would jump back to the start. */
@@ -128,6 +161,7 @@ class ScrollingLabel extends St.Widget {
         this._distance = distance;
         this._start();
     }
+
 
     /* Scrolling off, or the text already fits: one ellipsized copy. Pinning it
      * to the window is what makes Pango add the ellipsis — left at its natural
