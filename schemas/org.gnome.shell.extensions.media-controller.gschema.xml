@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="media-controller">
+
+  <enum id="org.gnome.shell.extensions.media-controller.panel-position">
+    <value nick="far-left" value="0"/>
+    <value nick="left" value="1"/>
+    <value nick="center" value="2"/>
+    <value nick="right" value="3"/>
+    <value nick="far-right" value="4"/>
+  </enum>
+
+  <enum id="org.gnome.shell.extensions.media-controller.scroll-direction">
+    <value nick="left-to-right" value="0"/>
+    <value nick="right-to-left" value="1"/>
+  </enum>
+
+  <enum id="org.gnome.shell.extensions.media-controller.card-art-size">
+    <value nick="small" value="0"/>
+    <value nick="medium" value="1"/>
+    <value nick="large" value="2"/>
+  </enum>
+
+  <schema id="org.gnome.shell.extensions.media-controller"
+          path="/org/gnome/shell/extensions/media-controller/">
+
+    <key name="panel-position"
+         enum="org.gnome.shell.extensions.media-controller.panel-position">
+      <default>'left'</default>
+      <summary>Position in the top panel</summary>
+      <description>Which panel box the indicator is placed in.</description>
+    </key>
+
+    <key name="show-previous" type="b">
+      <default>true</default>
+      <summary>Show the previous button in the panel</summary>
+    </key>
+
+    <key name="show-play-pause" type="b">
+      <default>true</default>
+      <summary>Show the play/pause button in the panel</summary>
+    </key>
+
+    <key name="show-next" type="b">
+      <default>true</default>
+      <summary>Show the next button in the panel</summary>
+    </key>
+
+    <key name="show-seek-backward" type="b">
+      <default>false</default>
+      <summary>Show the skip-backward button in the panel</summary>
+      <description>Only shown for players that support seeking. Skips by seek-step-seconds.</description>
+    </key>
+
+    <key name="show-seek-forward" type="b">
+      <default>false</default>
+      <summary>Show the skip-forward button in the panel</summary>
+      <description>Only shown for players that support seeking. Skips by seek-step-seconds.</description>
+    </key>
+
+    <key name="show-shuffle" type="b">
+      <default>false</default>
+      <summary>Show the shuffle button in the panel</summary>
+      <description>Only shown for players that support shuffle.</description>
+    </key>
+
+    <key name="show-loop" type="b">
+      <default>false</default>
+      <summary>Show the loop button in the panel</summary>
+      <description>Only shown for players that support looping. Cycles between off, the whole queue, and one track.</description>
+    </key>
+
+    <key name="show-player-icon" type="b">
+      <default>true</default>
+      <summary>Show the player's application icon in the panel</summary>
+    </key>
+
+    <key name="show-title" type="b">
+      <default>true</default>
+      <summary>Show the track title in the panel</summary>
+    </key>
+
+    <key name="show-artist" type="b">
+      <default>true</default>
+      <summary>Show the artist in the panel</summary>
+    </key>
+
+    <key name="panel-text-width" type="i">
+      <default>300</default>
+      <range min="60" max="600"/>
+      <summary>Width of the panel text, in pixels</summary>
+      <description>The track text always occupies this width. Text that does not fit is truncated with an ellipsis, or scrolled when scroll-text is set.</description>
+    </key>
+
+    <key name="scroll-text" type="b">
+      <default>true</default>
+      <summary>Scroll panel text that does not fit</summary>
+      <description>Text wider than panel-text-width loops past it instead of being truncated.</description>
+    </key>
+
+    <key name="scroll-speed" type="i">
+      <default>30</default>
+      <range min="10" max="120"/>
+      <summary>Scrolling speed in pixels per second</summary>
+    </key>
+
+    <key name="scroll-loop" type="b">
+      <default>false</default>
+      <summary>Keep scrolling the panel text</summary>
+      <description>When false the text scrolls once per track and then rests, truncated with an ellipsis.</description>
+    </key>
+
+    <key name="scroll-direction"
+         enum="org.gnome.shell.extensions.media-controller.scroll-direction">
+      <default>'left-to-right'</default>
+      <summary>Which way the scrolling text travels</summary>
+    </key>
+
+    <key name="controls-on-left" type="b">
+      <default>false</default>
+      <summary>Place the playback controls before the text</summary>
+    </key>
+
+    <key name="hide-when-inactive" type="b">
+      <default>true</default>
+      <summary>Hide the indicator when no player is running</summary>
+    </key>
+
+    <key name="card-show-art" type="b">
+      <default>true</default>
+      <summary>Show album art in the card</summary>
+    </key>
+
+    <key name="card-art-size"
+         enum="org.gnome.shell.extensions.media-controller.card-art-size">
+      <default>'medium'</default>
+      <summary>How large the album art is drawn in the card</summary>
+      <description>Only has an effect while card-show-art is set. The fallback player icon scales to match.</description>
+    </key>
+
+    <key name="pause-others-on-play" type="b">
+      <default>true</default>
+      <summary>Only let one player play at a time</summary>
+      <description>When a player starts playing, whichever other player was playing is paused. Players already running when the extension starts are left alone.</description>
+    </key>
+
+    <key name="card-show-player-switcher" type="b">
+      <default>true</default>
+      <summary>Show the player switcher in the card</summary>
+      <description>A strip of player icons beside the card's settings button, one per running media player. Only shown while more than one player is running.</description>
+    </key>
+
+    <key name="card-show-seek-bar" type="b">
+      <default>true</default>
+      <summary>Show the seek bar in the card</summary>
+    </key>
+
+    <key name="card-show-seek-buttons" type="b">
+      <default>true</default>
+      <summary>Show the skip-back and skip-forward buttons in the card</summary>
+    </key>
+
+    <key name="card-show-shuffle" type="b">
+      <default>true</default>
+      <summary>Show the shuffle button in the card</summary>
+      <description>Only shown for players that support shuffle.</description>
+    </key>
+
+    <key name="card-show-loop" type="b">
+      <default>true</default>
+      <summary>Show the loop button in the card</summary>
+      <description>Only shown for players that support looping. Cycles between off, the whole queue, and one track.</description>
+    </key>
+
+    <key name="seek-step-seconds" type="i">
+      <default>10</default>
+      <range min="2" max="20"/>
+      <summary>Seconds skipped by the seek buttons</summary>
+    </key>
+
+    <key name="card-width" type="i">
+      <default>400</default>
+      <range min="400" max="560"/>
+      <summary>Card width in pixels</summary>
+    </key>
+
+  </schema>
+</schemalist>

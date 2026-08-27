@@ -1,0 +1,259 @@
+/* Media Controls
+ *
+ * The card pins its own background color but inherits the shell's popup-menu
+ * foreground, so text and icons still follow the theme and the user's accent
+ * color.
+ */
+
+/* ---------- Panel indicator ---------- */
+
+.mc-panel-button {
+  -natural-hpadding: 6px;
+  -minimum-hpadding: 4px;
+}
+
+.mc-panel-box {
+  spacing: 6px;
+}
+
+.mc-panel-text {
+  spacing: 6px;
+}
+
+.mc-panel-label {
+  font-weight: 500;
+}
+
+.mc-panel-controls {
+  spacing: 2px;
+}
+
+/* Equal padding on all four sides keeps the hover fill a circle around the
+ * 16px icon rather than a slab as tall as the panel. */
+.mc-panel-control {
+  border-radius: 99px;
+  padding: 4px;
+}
+
+/* Neutral grey reads correctly on both light and dark panels. The icon-plus-title
+ * area gets no fill of its own: the whole indicator is the click target there,
+ * and the shell's own `.panel-button:hover` already lights it up. */
+.mc-panel-control:hover {
+  background-color: rgba(127, 127, 127, 0.2);
+}
+
+.mc-panel-control:active {
+  background-color: rgba(127, 127, 127, 0.35);
+}
+
+/* ---------- Card container ---------- */
+.mc-card-menu {
+  padding: 0;
+  background-color: #222226;
+}
+
+.mc-card-item {
+  padding: 0;
+  margin: 0;
+  border-radius: 20px;
+}
+
+.mc-card-item:hover,
+.mc-card-item:focus,
+.mc-card-item:active,
+.mc-card-item:selected {
+  background-color: transparent;
+}
+
+.mc-card {
+  spacing: 12px;
+  padding: 14px;
+}
+
+/* ---------- Player switcher ---------- */
+
+/* A column of app icons beside the gear, shown only while more than one player
+ * is running. The tray around them is what reads as a switch rather than as a
+ * handful of loose buttons; the fully round ends suit a stack of circular icon
+ * buttons the same way they suited a row of them. */
+.mc-player-tabs {
+  spacing: 2px;
+  padding: 2px;
+  border-radius: 99px;
+  background-color: rgba(127, 127, 127, 0.15);
+}
+
+.mc-player-tab {
+  border-radius: 99px;
+  padding: 4px;
+}
+
+.mc-player-tab:hover {
+  background-color: rgba(127, 127, 127, 0.25);
+}
+
+/* The selected tab reads as a raised segment, in the same neutral grey the rest
+ * of the card uses, so it works on light and dark themes alike. */
+.mc-player-tab-active {
+  background-color: rgba(127, 127, 127, 0.4);
+}
+
+/* ---------- Header: art, text, equalizer ---------- */
+
+.mc-card-header {
+  spacing: 12px;
+}
+
+/* Width, height and border-radius follow the card-art-size setting, so they are
+ * applied inline alongside the artwork's background-image; the border is drawn
+ * with that same radius. Neutral grey at low opacity reads as a hairline on
+ * both light and dark themes. */
+.mc-art {
+  background-color: rgba(127, 127, 127, 0.2);
+  background-size: cover;
+  border: 1px solid rgba(85, 85, 85, 0.4);
+}
+
+/* Clicking the artwork raises the player's window, so it needs a cue that it is
+ * a target at all. The accent color is the same one the equalizer and the seek
+ * bar use, and only the border moves — the artwork itself stays untouched.
+ * Players that cannot be raised are left non-reactive, so they never hover. */
+.mc-art:hover,
+.mc-art:focus {
+  border-color: -st-accent-color;
+}
+
+.mc-card-text {
+  spacing: 2px;
+}
+
+.mc-card-title {
+  font-weight: 700;
+  font-size: 1.05em;
+  color: #ffffff;
+}
+
+.mc-card-artist {
+  font-weight: 500;
+  font-size: 0.9em;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.mc-card-album {
+  font-weight: 400;
+  font-size: 0.8em;
+  letter-spacing: 0.2px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.mc-card-actions {
+  spacing: 4px;
+}
+
+/* The player switcher column and the gear, side by side. */
+.mc-card-actions-top {
+  spacing: 4px;
+}
+
+/* Holds the equalizer, centred against the artwork. */
+.mc-card-status {
+  spacing: 6px;
+}
+
+.mc-app-button {
+  border-radius: 99px;
+  padding: 6px;
+}
+
+.mc-app-button:hover {
+  background-color: rgba(127, 127, 127, 0.25);
+}
+
+/* ---------- Equalizer ---------- */
+
+/* Height is fixed so the bars grow from a steady baseline without reflowing the
+ * header. The right padding matches the gear button's own 6px, so the bars line
+ * up with the gear icon above them rather than with the button's edge. */
+.mc-equalizer {
+  height: 12px;
+  spacing: 2px;
+  padding-right: 6px;
+}
+
+/* Follows the desktop accent colour, the same source the seek slider uses. */
+.mc-eq-bar {
+  width: 3px;
+  border-radius: 2px;
+  background-color: -st-accent-color;
+}
+
+/* ---------- Seek bar ---------- */
+
+/* Colors come from the theme's .slider rule, including the accent color. */
+.mc-seek-box {
+  spacing: 0;
+  padding: 2px 2px 0 2px;
+}
+
+.mc-seek {
+  height: 18px;
+}
+
+.mc-time {
+  font-size: 0.8em;
+  font-feature-settings: "tnum";
+  font-weight: 500;
+  color: -st-accent-color;
+}
+
+/* ---------- Controls ---------- */
+
+/* One stacked row: shuffle pinned to the left edge, loop to the right, the
+ * transport cluster centred against the full card width. */
+.mc-controls-row {
+  padding: 2px 0 0 0;
+}
+
+/* Buttons also carry .message-media-control, which the theme styles for hover,
+ * active and insensitive states in both light and dark. */
+.mc-card-controls {
+  spacing: 6px;
+}
+
+.mc-control-button {
+  border-radius: 99px;
+  padding: 8px 12px;
+}
+
+.mc-control-button StIcon {
+  icon-size: 22px;
+}
+
+.mc-seek-button StIcon {
+  icon-size: 18px;
+}
+
+.mc-play-button {
+  padding: 8px 16px;
+}
+
+.mc-play-button StIcon {
+  icon-size: 28px;
+}
+
+/* Shuffle and loop: quieter than the transport buttons, and square padding so
+ * the hover fill stays a circle around the smaller icon. */
+.mc-mode-button {
+  padding: 8px;
+}
+
+.mc-mode-button StIcon {
+  icon-size: 16px;
+}
+
+/* An engaged mode wears the desktop accent colour — the same source the
+ * equalizer bars and the seek slider use. Also applies to the panel's copies
+ * of these buttons. */
+.mc-mode-on StIcon {
+  color: -st-accent-color;
+}
