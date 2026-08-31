@@ -35,6 +35,7 @@ class ScrollingLabel extends St.Widget {
 
         this._text = '';
         this._isLyric = false;
+        this._durationMs = 0;
         this._width = 200;
         this._scrolling = false;
         this._speed = 30;
@@ -68,12 +69,14 @@ class ScrollingLabel extends St.Widget {
     /**
      * @param {string} text
      * @param {boolean} isLyric when true, scrolls once to reveal the full line and stops at the end
+     * @param {number} durationMs when > 0 in lyric mode, calculates dynamic scroll duration to match line duration
      */
-    setText(text, isLyric = false) {
-        if (text === this._text && isLyric === this._isLyric)
+    setText(text, isLyric = false, durationMs = 0) {
+        if (text === this._text && isLyric === this._isLyric && durationMs === this._durationMs)
             return;
         this._text = text;
         this._isLyric = isLyric;
+        this._durationMs = durationMs;
         this._update(true);
     }
 
@@ -135,10 +138,19 @@ class ScrollingLabel extends St.Widget {
                 return;
             }
 
+            let animDuration;
+            if (this._durationMs > 0) {
+                /* Reserve PAUSE_MS at start and 300ms at end */
+                const available = this._durationMs - PAUSE_MS - 300;
+                animDuration = Math.max(500, available);
+            } else {
+                animDuration = (distance / Math.max(1, this._speed)) * 1000;
+            }
+
             this._box.translation_x = 0;
             this._box.ease({
                 translation_x: -distance,
-                duration: (distance / Math.max(1, this._speed)) * 1000,
+                duration: animDuration,
                 delay: PAUSE_MS,
                 mode: Clutter.AnimationMode.LINEAR,
             });

@@ -44,6 +44,7 @@ const PANEL_KEYS = [
     'show-title',
     'show-artist',
     'show-lyrics-in-panel',
+    'lyrics-dynamic-scroll-speed',
     'panel-text-width',
     'keep-panel-width-when-idle',
     'scroll-text',
@@ -169,6 +170,7 @@ class MediaIndicator extends PanelMenu.Button {
             showTitle: settings.get_boolean('show-title'),
             showArtist: settings.get_boolean('show-artist'),
             showLyricsInPanel: settings.get_boolean('show-lyrics-in-panel'),
+            lyricsDynamicSpeed: settings.get_boolean('lyrics-dynamic-scroll-speed'),
             textWidth: settings.get_int('panel-text-width'),
             keepIdleWidth: settings.get_boolean('keep-panel-width-when-idle'),
             scrollText: settings.get_boolean('scroll-text'),
@@ -354,16 +356,19 @@ class MediaIndicator extends PanelMenu.Button {
         const active = this._lyricsData.getActiveLine(positionMs);
         let displayText = textFallback;
         let isLyric = false;
+        let lineDurationMs = 0;
 
         if (active?.text) {
             displayText = active.text;
             isLyric = true;
+            if (prefs.lyricsDynamicSpeed && active.durationMs > 0)
+                lineDurationMs = active.durationMs;
         } else if (active?.isIntro || active?.isOutro) {
             displayText = textFallback;
             isLyric = false;
         }
 
-        this._label.setText(displayText, isLyric);
+        this._label.setText(displayText, isLyric, lineDurationMs);
         this._label.visible = displayText.length > 0;
     }
 

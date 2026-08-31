@@ -207,6 +207,12 @@
       <description>Show a button in the card header to toggle the full synced lyrics view.</description>
     </key>
 
+    <key name="lyrics-dynamic-scroll-speed" type="b">
+      <default>true</default>
+      <summary>Dynamic lyric scroll speed</summary>
+      <description>Adjust the scrolling speed of each lyric line to match the duration it is sung before the next line begins.</description>
+    </key>
+
     <key name="keep-panel-width-when-idle" type="b">
       <default>false</default>
       <summary>Keep panel text width when idle</summary>

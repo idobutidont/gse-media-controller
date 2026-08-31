@@ -152,6 +152,10 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         lyricsGroup.add(this._switchRow(settings, 'show-lyrics-in-panel',
             _('Show live lyrics in panel'),
             _('Display current synchronized lyric line in the panel while playing, falling back to track info when unavailable.')));
+        lyricsGroup.add(this._bindSensitive(settings, 'show-lyrics-in-panel',
+            this._switchRow(settings, 'lyrics-dynamic-scroll-speed',
+                _('Dynamic lyric scroll speed'),
+                _('Adjust the scrolling speed of each lyric line to fit the duration it is sung before the next line begins.'))));
         page.add(lyricsGroup);
 
         const text = new Adw.PreferencesGroup({

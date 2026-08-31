@@ -141,6 +141,12 @@ export function parseLRC(lrcContent) {
 
     lines.sort((a, b) => a.timeMs - b.timeMs);
 
+    /* Compute durationMs for each line based on when the next line begins */
+    for (let i = 0; i < lines.length; i++) {
+        const nextTime = (i + 1 < lines.length) ? lines[i + 1].timeMs : (lines[i].timeMs + 5000);
+        lines[i].durationMs = Math.max(1000, nextTime - lines[i].timeMs);
+    }
+
     return {lines, offsetMs};
 }
 
@@ -201,13 +207,15 @@ export class LyricsData {
 
         const line = lines[index];
         const isOutro = index === lines.length - 1 &&
-            positionMs > line.timeMs + 10000;
+            positionMs > line.timeMs + (line.durationMs || 10000);
 
         return {
             index,
             line,
             text: line.text,
             isRTL: line.isRTL,
+            timeMs: line.timeMs,
+            durationMs: line.durationMs || 4000,
             isIntro: false,
             isOutro,
         };
