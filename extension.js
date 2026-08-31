@@ -45,6 +45,7 @@ const PANEL_KEYS = [
     'show-artist',
     'show-lyrics-in-panel',
     'lyrics-dynamic-scroll-speed',
+    'lyrics-dynamic-scroll-offset',
     'lyrics-use-app-whitelist',
     'lyrics-app-whitelist',
     'panel-text-width',
@@ -174,6 +175,7 @@ class MediaIndicator extends PanelMenu.Button {
             showArtist: settings.get_boolean('show-artist'),
             showLyricsInPanel: settings.get_boolean('show-lyrics-in-panel'),
             lyricsDynamicSpeed: settings.get_boolean('lyrics-dynamic-scroll-speed'),
+            lyricsDynamicOffset: settings.get_int('lyrics-dynamic-scroll-offset'),
             useLyricsWhitelist: settings.get_boolean('lyrics-use-app-whitelist'),
             lyricsWhitelist: settings.get_strv('lyrics-app-whitelist'),
             textWidth: settings.get_int('panel-text-width'),
@@ -376,7 +378,7 @@ class MediaIndicator extends PanelMenu.Button {
             displayText = active.text;
             isLyric = true;
             if (prefs.lyricsDynamicSpeed && active.durationMs > 0)
-                lineDurationMs = active.durationMs;
+                lineDurationMs = Math.max(500, active.durationMs + prefs.lyricsDynamicOffset);
         } else if (active?.isIntro || active?.isOutro) {
             displayText = textFallback;
             isLyric = false;

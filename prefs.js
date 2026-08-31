@@ -156,6 +156,11 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
             this._switchRow(settings, 'lyrics-dynamic-scroll-speed',
                 _('Dynamic lyric scroll speed'),
                 _('Adjust the scrolling speed of each lyric line to fit the duration it is sung before the next line begins.'))));
+        lyricsGroup.add(this._bindSensitive(settings, 'lyrics-dynamic-scroll-speed',
+            this._spinRow(settings, 'lyrics-dynamic-scroll-offset',
+                _('Dynamic scroll timing offset (ms)'),
+                _('Fine-tune the dynamic scroll duration in milliseconds. Positive values allow more time (scrolls slower), negative values scroll faster.'),
+                -3000, 3000, 100)));
         lyricsGroup.add(this._switchRow(settings, 'lyrics-use-app-whitelist',
             _('Only fetch lyrics for whitelisted apps'),
             _('Limit lyrics fetching to specific music players to avoid querying for video players or browser tabs.')));
