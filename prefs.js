@@ -156,6 +156,27 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
             this._switchRow(settings, 'lyrics-dynamic-scroll-speed',
                 _('Dynamic lyric scroll speed'),
                 _('Adjust the scrolling speed of each lyric line to fit the duration it is sung before the next line begins.'))));
+        lyricsGroup.add(this._switchRow(settings, 'lyrics-use-app-whitelist',
+            _('Only fetch lyrics for whitelisted apps'),
+            _('Limit lyrics fetching to specific music players to avoid querying for video players or browser tabs.')));
+
+        const whitelistRow = new Adw.EntryRow({
+            title: _('Whitelisted apps (comma-separated)'),
+            text: settings.get_strv('lyrics-app-whitelist').join(', '),
+        });
+        whitelistRow.connect('notify::text', () => {
+            const list = whitelistRow.text
+                .split(',')
+                .map(s => s.trim().toLowerCase())
+                .filter(Boolean);
+            settings.set_strv('lyrics-app-whitelist', list);
+        });
+        settings.connect('changed::lyrics-app-whitelist', () => {
+            const current = settings.get_strv('lyrics-app-whitelist').join(', ');
+            if (whitelistRow.text !== current)
+                whitelistRow.text = current;
+        });
+        lyricsGroup.add(this._bindSensitive(settings, 'lyrics-use-app-whitelist', whitelistRow));
         page.add(lyricsGroup);
 
         const text = new Adw.PreferencesGroup({

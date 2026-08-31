@@ -213,6 +213,18 @@
       <description>Adjust the scrolling speed of each lyric line to match the duration it is sung before the next line begins.</description>
     </key>
 
+    <key name="lyrics-use-app-whitelist" type="b">
+      <default>false</default>
+      <summary>Use app whitelist for lyrics</summary>
+      <description>Only fetch and display lyrics for media players matching the whitelist.</description>
+    </key>
+
+    <key name="lyrics-app-whitelist" type="as">
+      <default>['spotify', 'rhythmbox', 'amberol', 'lollypop', 'cider', 'feishin', 'elisa', 'audacious', 'strawberry', 'g4music']</default>
+      <summary>Whitelisted apps for lyrics</summary>
+      <description>List of player names, desktop entry IDs, or D-Bus names allowed to fetch and display lyrics.</description>
+    </key>
+
     <key name="keep-panel-width-when-idle" type="b">
       <default>false</default>
       <summary>Keep panel text width when idle</summary>

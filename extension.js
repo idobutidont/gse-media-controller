@@ -11,7 +11,7 @@ import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/ex
 
 
 import {ArtCache} from './artCache.js';
-import {LyricsManager} from './lyrics.js';
+import {isPlayerWhitelisted, LyricsManager} from './lyrics.js';
 import {MediaCard} from './mediaCard.js';
 import {MprisManager} from './mpris.js';
 import {ScrollingLabel} from './scrollingLabel.js';
@@ -45,6 +45,8 @@ const PANEL_KEYS = [
     'show-artist',
     'show-lyrics-in-panel',
     'lyrics-dynamic-scroll-speed',
+    'lyrics-use-app-whitelist',
+    'lyrics-app-whitelist',
     'panel-text-width',
     'keep-panel-width-when-idle',
     'scroll-text',
@@ -124,9 +126,10 @@ class MediaIndicator extends PanelMenu.Button {
 
         this._lyricsManager.connectObject('lyrics-loaded', (_m, key) => {
             const player = this._manager.activePlayer;
-            if (player && this._lyricsManager.trackKey(player.artist, player.title) === key) {
+            if (player && this._isLyricsAllowed(player) && this._lyricsManager.trackKey(player.artist, player.title) === key) {
                 this._lyricsData = this._lyricsManager.currentLyrics;
                 this._updatePanelDisplay();
+                this._updateLyricsTimer();
             }
         }, this);
 
@@ -171,6 +174,8 @@ class MediaIndicator extends PanelMenu.Button {
             showArtist: settings.get_boolean('show-artist'),
             showLyricsInPanel: settings.get_boolean('show-lyrics-in-panel'),
             lyricsDynamicSpeed: settings.get_boolean('lyrics-dynamic-scroll-speed'),
+            useLyricsWhitelist: settings.get_boolean('lyrics-use-app-whitelist'),
+            lyricsWhitelist: settings.get_strv('lyrics-app-whitelist'),
             textWidth: settings.get_int('panel-text-width'),
             keepIdleWidth: settings.get_boolean('keep-panel-width-when-idle'),
             scrollText: settings.get_boolean('scroll-text'),
@@ -322,6 +327,15 @@ class MediaIndicator extends PanelMenu.Button {
         return button;
     }
 
+    /** Checks whether lyrics are permitted for the given player based on whitelist rules. */
+    _isLyricsAllowed(player) {
+        if (!player)
+            return false;
+        if (!this._prefs.useLyricsWhitelist)
+            return true;
+        return isPlayerWhitelisted(player, this._prefs.lyricsWhitelist);
+    }
+
     /** The full text; the label itself truncates or scrolls it. */
     _panelText(player) {
         const parts = [];
@@ -340,7 +354,7 @@ class MediaIndicator extends PanelMenu.Button {
         const prefs = this._prefs;
         const textFallback = this._panelText(player);
 
-        if (!player.isPlaying || !prefs.showLyricsInPanel || !this._lyricsData || !this._lyricsData.synced || this._lyricsData.lines.length === 0) {
+        if (!player.isPlaying || !prefs.showLyricsInPanel || !this._isLyricsAllowed(player) || !this._lyricsData || !this._lyricsData.synced || this._lyricsData.lines.length === 0) {
             this._label.setText(textFallback, false);
             this._label.visible = textFallback.length > 0;
             return;
@@ -375,6 +389,7 @@ class MediaIndicator extends PanelMenu.Button {
     _updateLyricsTimer() {
         const player = this._manager.activePlayer;
         const wanted = player?.isPlaying && this._prefs.showLyricsInPanel &&
+            this._isLyricsAllowed(player) &&
             this._lyricsData && this._lyricsData.synced;
 
         if (wanted && !this._lyricsTimerId) {
@@ -490,13 +505,19 @@ class MediaIndicator extends PanelMenu.Button {
             }
         });
 
-        this._lyricsManager.resolve(player).then(lyricsData => {
-            if (this._manager.activePlayer === player) {
-                this._lyricsData = lyricsData;
-                this._updatePanelDisplay();
-                this._updateLyricsTimer();
-            }
-        });
+        if (this._isLyricsAllowed(player)) {
+            this._lyricsManager.resolve(player).then(lyricsData => {
+                if (this._manager.activePlayer === player) {
+                    this._lyricsData = lyricsData;
+                    this._updatePanelDisplay();
+                    this._updateLyricsTimer();
+                }
+            }).catch(() => {});
+        } else {
+            this._lyricsData = null;
+            this._updatePanelDisplay();
+            this._updateLyricsTimer();
+        }
 
         this._updatePanelDisplay();
         this._updateLyricsTimer();

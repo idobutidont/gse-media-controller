@@ -14,6 +14,7 @@ import { gettext as _ } from 'resource:///org/gnome/shell/extensions/extension.j
 import { Slider } from 'resource:///org/gnome/shell/ui/slider.js';
 
 import { Equalizer } from './equalizer.js';
+import { isPlayerWhitelisted } from './lyrics.js';
 import {
     US_PER_SECOND, loopIconName, nextLoopStatus, playPauseIconName,
     seekOffset, setToggleStyle
@@ -150,12 +151,14 @@ export const MediaCard = GObject.registerClass({
                 () => this._updateSwitcher()),
             this._settings.connect('changed::show-lyrics-in-card', () => this._syncLyrics()),
             this._settings.connect('changed::card-show-lyrics-button', () => this._syncLyrics()),
+            this._settings.connect('changed::lyrics-use-app-whitelist', () => this._fetchLyrics()),
+            this._settings.connect('changed::lyrics-app-whitelist', () => this._fetchLyrics()),
             this._settings.connect('changed::card-width', () => this._applyWidth()),
             this._settings.connect('changed::card-art-size', () => this._applyArtSize()),
         ];
 
         this._lyricsSignalId = this._lyricsManager.connect('lyrics-loaded', (_m, key) => {
-            if (this._player && this._lyricsManager.trackKey(this._player.artist, this._player.title) === key) {
+            if (this._player && this._isLyricsAllowed(this._player) && this._lyricsManager.trackKey(this._player.artist, this._player.title) === key) {
                 this._lyricsData = this._lyricsManager.currentLyrics;
                 this._syncLyrics();
             }
@@ -678,15 +681,25 @@ export const MediaCard = GObject.registerClass({
         this._refreshPosition();
     }
 
+    _isLyricsAllowed(player) {
+        if (!player)
+            return false;
+        const useWhitelist = this._settings.get_boolean('lyrics-use-app-whitelist');
+        if (!useWhitelist)
+            return true;
+        const whitelist = this._settings.get_strv('lyrics-app-whitelist');
+        return isPlayerWhitelisted(player, whitelist);
+    }
+
     _fetchLyrics() {
-        if (!this._player || !this._player.title) {
+        if (!this._player || !this._player.title || !this._isLyricsAllowed(this._player)) {
             this._lyricsData = null;
             this._syncLyrics();
             return;
         }
 
         this._lyricsManager.resolve(this._player).then(lyricsData => {
-            if (this._player) {
+            if (this._player && this._isLyricsAllowed(this._player)) {
                 this._lyricsData = lyricsData;
                 this._syncLyrics();
                 this._updateLyricsActive(Math.round(this._position / 1000));

@@ -31,6 +31,30 @@ export function isRTLText(text) {
 }
 
 /**
+ * Checks if a player matches the configured lyrics app whitelist.
+ * Matches against desktopEntry, identity, and busName.
+ *
+ * @param {object} player an MprisPlayer
+ * @param {string[]} whitelist array of whitelisted app names
+ * @returns {boolean}
+ */
+export function isPlayerWhitelisted(player, whitelist) {
+    if (!player || !Array.isArray(whitelist) || whitelist.length === 0)
+        return false;
+
+    const desktop = (player.desktopEntry || '').toLowerCase();
+    const identity = (player.identity || '').toLowerCase();
+    const bus = (player.busName || '').toLowerCase().replace('org.mpris.mediaplayer2.', '');
+
+    return whitelist.some(entry => {
+        const item = (entry || '').trim().toLowerCase();
+        if (!item)
+            return false;
+        return desktop.includes(item) || identity.includes(item) || bus.includes(item);
+    });
+}
+
+/**
  * Sanitizes track title to increase match rate on LRCLIB while preserving
  * non-Latin character sets and core track information.
  * @param {string} title
