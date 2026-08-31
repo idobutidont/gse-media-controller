@@ -338,7 +338,7 @@ class MediaIndicator extends PanelMenu.Button {
         const prefs = this._prefs;
         const textFallback = this._panelText(player);
 
-        if (!prefs.showLyricsInPanel || !this._lyricsData || !this._lyricsData.synced || this._lyricsData.lines.length === 0) {
+        if (!player.isPlaying || !prefs.showLyricsInPanel || !this._lyricsData || !this._lyricsData.synced || this._lyricsData.lines.length === 0) {
             this._label.setText(textFallback, false);
             this._label.visible = textFallback.length > 0;
             return;
