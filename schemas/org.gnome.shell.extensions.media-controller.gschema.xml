@@ -213,10 +213,10 @@
       <description>Adjust the scrolling speed of each lyric line to match the duration it is sung before the next line begins.</description>
     </key>
 
-    <key name="lyrics-dynamic-scroll-offset" type="i">
-      <default>0</default>
-      <summary>Dynamic lyric scroll speed offset</summary>
-      <description>Offset in milliseconds to adjust dynamic lyric scroll speed timing (negative for faster scrolling, positive for slower).</description>
+    <key name="lyrics-dynamic-scroll-multiplier" type="d">
+      <default>1.0</default>
+      <summary>Dynamic lyric scroll speed multiplier</summary>
+      <description>Speed multiplier for dynamic lyric scrolling (e.g. 1.5 for 50% faster, 0.8 for slower).</description>
     </key>
 
     <key name="lyrics-use-app-whitelist" type="b">

@@ -45,7 +45,7 @@ const PANEL_KEYS = [
     'show-artist',
     'show-lyrics-in-panel',
     'lyrics-dynamic-scroll-speed',
-    'lyrics-dynamic-scroll-offset',
+    'lyrics-dynamic-scroll-multiplier',
     'lyrics-use-app-whitelist',
     'lyrics-app-whitelist',
     'panel-text-width',
@@ -175,7 +175,7 @@ class MediaIndicator extends PanelMenu.Button {
             showArtist: settings.get_boolean('show-artist'),
             showLyricsInPanel: settings.get_boolean('show-lyrics-in-panel'),
             lyricsDynamicSpeed: settings.get_boolean('lyrics-dynamic-scroll-speed'),
-            lyricsDynamicOffset: settings.get_int('lyrics-dynamic-scroll-offset'),
+            lyricsDynamicMultiplier: Math.max(0.1, settings.get_double('lyrics-dynamic-scroll-multiplier')),
             useLyricsWhitelist: settings.get_boolean('lyrics-use-app-whitelist'),
             lyricsWhitelist: settings.get_strv('lyrics-app-whitelist'),
             textWidth: settings.get_int('panel-text-width'),
@@ -373,18 +373,21 @@ class MediaIndicator extends PanelMenu.Button {
         let displayText = textFallback;
         let isLyric = false;
         let lineDurationMs = 0;
+        let speedMultiplier = 1.0;
 
         if (active?.text) {
             displayText = active.text;
             isLyric = true;
-            if (prefs.lyricsDynamicSpeed && active.durationMs > 0)
-                lineDurationMs = Math.max(500, active.durationMs + prefs.lyricsDynamicOffset);
+            if (prefs.lyricsDynamicSpeed && active.durationMs > 0) {
+                lineDurationMs = active.durationMs;
+                speedMultiplier = prefs.lyricsDynamicMultiplier || 1.0;
+            }
         } else if (active?.isIntro || active?.isOutro) {
             displayText = textFallback;
             isLyric = false;
         }
 
-        this._label.setText(displayText, isLyric, lineDurationMs);
+        this._label.setText(displayText, isLyric, lineDurationMs, speedMultiplier);
         this._label.visible = displayText.length > 0;
     }
 

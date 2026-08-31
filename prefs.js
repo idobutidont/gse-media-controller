@@ -78,10 +78,11 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         return row;
     }
 
-    _spinRow(settings, key, title, subtitle, min, max, step) {
+    _spinRow(settings, key, title, subtitle, min, max, step, digits = 0) {
         const row = new Adw.SpinRow({
             title,
             subtitle,
+            digits,
             adjustment: new Gtk.Adjustment({
                 lower: min,
                 upper: max,
@@ -157,10 +158,10 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
                 _('Dynamic lyric scroll speed'),
                 _('Adjust the scrolling speed of each lyric line to fit the duration it is sung before the next line begins.'))));
         lyricsGroup.add(this._bindSensitive(settings, 'lyrics-dynamic-scroll-speed',
-            this._spinRow(settings, 'lyrics-dynamic-scroll-offset',
-                _('Dynamic scroll timing offset (ms)'),
-                _('Fine-tune the dynamic scroll duration in milliseconds. Positive values allow more time (scrolls slower), negative values scroll faster.'),
-                -3000, 3000, 100)));
+            this._spinRow(settings, 'lyrics-dynamic-scroll-multiplier',
+                _('Dynamic scroll speed multiplier'),
+                _('Scale the dynamic scroll speed (e.g. 1.5× for faster, 0.8× for slower).'),
+                0.5, 3.0, 0.1, 1)));
         lyricsGroup.add(this._switchRow(settings, 'lyrics-use-app-whitelist',
             _('Only fetch lyrics for whitelisted apps'),
             _('Limit lyrics fetching to specific music players to avoid querying for video players or browser tabs.')));

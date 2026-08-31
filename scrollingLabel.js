@@ -36,6 +36,7 @@ class ScrollingLabel extends St.Widget {
         this._text = '';
         this._isLyric = false;
         this._durationMs = 0;
+        this._speedMultiplier = 1.0;
         this._width = 200;
         this._scrolling = false;
         this._speed = 30;
@@ -69,14 +70,17 @@ class ScrollingLabel extends St.Widget {
     /**
      * @param {string} text
      * @param {boolean} isLyric when true, scrolls once to reveal the full line and stops at the end
-     * @param {number} durationMs when > 0 in lyric mode, calculates dynamic scroll duration to match line duration
+     * @param {number} durationMs when > 0 in lyric mode, line singing duration in milliseconds
+     * @param {number} speedMultiplier speed multiplier for dynamic lyric scrolling (default 1.0)
      */
-    setText(text, isLyric = false, durationMs = 0) {
-        if (text === this._text && isLyric === this._isLyric && durationMs === this._durationMs)
+    setText(text, isLyric = false, durationMs = 0, speedMultiplier = 1.0) {
+        if (text === this._text && isLyric === this._isLyric &&
+            durationMs === this._durationMs && speedMultiplier === this._speedMultiplier)
             return;
         this._text = text;
         this._isLyric = isLyric;
         this._durationMs = durationMs;
+        this._speedMultiplier = speedMultiplier;
         this._update(true);
     }
 
@@ -140,9 +144,10 @@ class ScrollingLabel extends St.Widget {
 
             let animDuration;
             if (this._durationMs > 0) {
-                /* Reserve PAUSE_MS at start and 300ms at end */
-                const available = this._durationMs - PAUSE_MS - 300;
-                animDuration = Math.max(500, available);
+                const baseScroll = Math.max(500, this._durationMs - PAUSE_MS - 300);
+                const mult = Math.max(0.1, this._speedMultiplier || 1.0);
+                const scaled = Math.round(baseScroll / mult);
+                animDuration = Math.max(400, scaled);
             } else {
                 animDuration = (distance / Math.max(1, this._speed)) * 1000;
             }
