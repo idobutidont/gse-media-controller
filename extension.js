@@ -5,6 +5,7 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
+import * as Mpris from 'resource:///org/gnome/shell/ui/mpris.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import {Extension, gettext as _} from 'resource:///org/gnome/shell/extensions/extension.js';
 
@@ -595,6 +596,7 @@ class MediaIndicator extends PanelMenu.Button {
 
 export default class MediaControlsExtension extends Extension {
     enable() {
+        this._origAddPlayer = null;
         this._settings = this.getSettings();
         this._artCache = new ArtCache();
         this._lyricsManager = new LyricsManager();
@@ -609,10 +611,48 @@ export default class MediaControlsExtension extends Extension {
          * the "hide when nothing is playing" state chosen during construction. */
         this._indicator.sync();
 
+        this._updateMediaNotificationVisibility();
+
         this._settings.connectObject(
             'changed::panel-position', () => this._reposition(),
-            'changed::pause-others-on-play',
-            () => this._applyExclusivePlayback(), this);
+            'changed::pause-others-on-play', () => this._applyExclusivePlayback(),
+            'changed::hide-media-notification', () => this._updateMediaNotificationVisibility(),
+            this);
+    }
+
+    _updateMediaNotificationVisibility(shouldReset = false) {
+        const hide = !shouldReset && this._settings.get_boolean('hide-media-notification');
+        const MprisSource = Mpris.MprisSource ?? Mpris.MediaSection;
+        const dateMenu = Main.panel?.statusArea?.dateMenu;
+        const messageList = dateMenu?._messageList;
+        const mediaSource = messageList?._messageView?._mediaSource ?? messageList?._mediaSection;
+
+        if (!MprisSource || !mediaSource)
+            return;
+
+        if (this._origAddPlayer && !hide) {
+            MprisSource.prototype._addPlayer = this._origAddPlayer;
+            this._origAddPlayer = null;
+            try {
+                mediaSource._onProxyReady?.();
+            } catch (e) {
+                console.warn(`media-controls: restoring media notification failed: ${e.message}`);
+            }
+        } else if (!this._origAddPlayer && hide) {
+            this._origAddPlayer = MprisSource.prototype._addPlayer;
+            MprisSource.prototype._addPlayer = function () {};
+            if (mediaSource._players) {
+                for (const player of mediaSource._players.values()) {
+                    try {
+                        mediaSource._onNameOwnerChanged?.(null, null, [player._busName, player._busName, '']);
+                    } catch {
+                        try {
+                            player.destroy?.();
+                        } catch {}
+                    }
+                }
+            }
+        }
     }
 
     /* The manager does the pausing, but the setting lives here: mpris.js knows
@@ -658,6 +698,8 @@ export default class MediaControlsExtension extends Extension {
     }
 
     disable() {
+        this._updateMediaNotificationVisibility(true);
+
         /* The extension has no `destroy` signal, so unlike the indicator this
          * owner needs the explicit disconnect. */
         this._settings.disconnectObject(this);

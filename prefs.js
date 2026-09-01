@@ -121,6 +121,9 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
         placement.add(this._switchRow(settings, 'keep-panel-width-when-idle',
             _('Keep text width when nothing is playing'),
             _('Preserve the reserved width in the top panel while idle so neighboring indicators do not shift around.')));
+        placement.add(this._switchRow(settings, 'hide-media-notification',
+            _('Hide music player notification'),
+            _('Hide the built-in media player controls widget in the notification tray / calendar menu.')));
         page.add(placement);
 
 

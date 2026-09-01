@@ -237,5 +237,11 @@
       <description>Preserve the reserved panel text width in the top bar even when nothing is playing, preventing neighboring panel items from shifting.</description>
     </key>
 
+    <key name="hide-media-notification" type="b">
+      <default>false</default>
+      <summary>Hide music player notification</summary>
+      <description>Hide the built-in media player notification widget in the notification tray / calendar menu.</description>
+    </key>
+
   </schema>
 </schemalist>
