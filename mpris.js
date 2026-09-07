@@ -461,6 +461,7 @@ export const MprisPlayer = GObject.registerClass({
 
                     const now = GLib.get_monotonic_time();
 
+                    /* If the bus returned a genuine non-zero position, use and record it. */
                     if (busSuccess && busPosition > 0) {
                         this._hasRealPosition = true;
                         this._lastPosition = busPosition;
@@ -469,16 +470,8 @@ export const MprisPlayer = GObject.registerClass({
                         return;
                     }
 
-                    if (busSuccess && busPosition === 0 && this._hasRealPosition) {
-                        /* Player genuinely reset or rewound to 0 */
-                        this._lastPosition = 0;
-                        this._lastPositionTime = now;
-                        resolve(0);
-                        return;
-                    }
-
-                    /* Player returned 0 without real position support (e.g. Firefox),
-                     * or D-Bus call failed. Use monotonic elapsed time while playing. */
+                    /* If the player returned 0 (e.g. Firefox, which always reports 0 for Position while playing)
+                     * or the D-Bus call failed, estimate elapsed position from the monotonic clock while playing. */
                     if (this.isPlaying) {
                         const elapsed = this._lastPositionTime > 0 ? (now - this._lastPositionTime) : 0;
                         const current = this.length > 0

@@ -399,6 +399,11 @@ class MediaIndicator extends PanelMenu.Button {
             this._lyricsData && this._lyricsData.synced;
 
         if (wanted && !this._lyricsTimerId) {
+            if (this._lastMonotonicTime === 0) {
+                this._lastMonotonicTime = GLib.get_monotonic_time();
+                this._lastPositionSyncTime = this._lastMonotonicTime;
+            }
+
             this._lyricsTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
                 const activePlayer = this._manager.activePlayer;
                 if (!activePlayer || !activePlayer.isPlaying) {
@@ -419,7 +424,7 @@ class MediaIndicator extends PanelMenu.Button {
                     });
                 }
 
-                const elapsedMicros = now - this._lastMonotonicTime;
+                const elapsedMicros = this._lastMonotonicTime > 0 ? (now - this._lastMonotonicTime) : 0;
                 const currentPosMicros = Math.max(0, this._lastPositionMicros + elapsedMicros);
                 this._updatePanelDisplay(Math.round(currentPosMicros / 1000));
 
@@ -445,6 +450,7 @@ class MediaIndicator extends PanelMenu.Button {
             this._seekedSignalId = player.connect('seeked', (_p, position) => {
                 this._lastPositionMicros = position;
                 this._lastMonotonicTime = GLib.get_monotonic_time();
+                this._lastPositionSyncTime = this._lastMonotonicTime;
                 this._updatePanelDisplay(Math.round(position / 1000));
             });
         }

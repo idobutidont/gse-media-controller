@@ -1080,8 +1080,15 @@ export const MediaCard = GObject.registerClass({
         this._setRaisable(player.canRaise, player.identity);
 
         this._length = player.length;
-        if (this._length <= 0 && this._lyricsData?.durationMs > 0)
-            this._length = this._lyricsData.durationMs * 1000;
+        const lyrics = this._lyricsData ||
+            (this._lyricsManager.currentLyrics?.trackKey === this._lyricsManager.trackKey(player.artist, player.title)
+                ? this._lyricsManager.currentLyrics
+                : null);
+        if (this._length <= 0 && lyrics?.durationMs > 0) {
+            this._length = lyrics.durationMs * 1000;
+            if (!this._lyricsData)
+                this._lyricsData = lyrics;
+        }
 
         const showSeek = this._settings.get_boolean('card-show-seek-bar');
         this._seekBox.visible = showSeek;
