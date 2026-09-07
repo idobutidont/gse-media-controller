@@ -139,6 +139,12 @@ export const MprisPlayer = GObject.registerClass({
         this._propsChangedId = 0;
         this._seekedId = 0;
 
+        this._lastPosition = 0;
+        this._lastPositionTime = GLib.get_monotonic_time();
+        this._hasRealPosition = false;
+        this._lastTrackKey = '';
+        this._lastStatus = 'Stopped';
+
         /* The wrapper classes are built here rather than at module scope:
          * modules stay loaded across disable/enable, so nothing GObject-related
          * may be created at import time. */
@@ -155,10 +161,18 @@ export const MprisPlayer = GObject.registerClass({
             this._playerProxy = proxy;
             this._propsChangedId = proxy.connect('g-properties-changed', () => {
                 this._metadata = null;
+                this._checkTrackAndStatus();
                 this.emit('changed');
             });
             this._seekedId = proxy.connectSignal('Seeked',
-                (_p, _sender, [position]) => this.emit('seeked', asNumber(position)));
+                (_p, _sender, [position]) => {
+                    const pos = asNumber(position);
+                    this._lastPosition = pos;
+                    this._lastPositionTime = GLib.get_monotonic_time();
+                    this._hasRealPosition = true;
+                    this.emit('seeked', pos);
+                });
+            this._checkTrackAndStatus();
             this.emit('changed');
         }, this._cancellable, Gio.DBusProxyFlags.NONE);
 
@@ -384,9 +398,42 @@ export const MprisPlayer = GObject.registerClass({
         }
     }
 
+    _checkTrackAndStatus() {
+        const currentKey = `${this.artist}::${this.title}::${this.trackId}`;
+        const currentStatus = this.status;
+
+        if (this._lastTrackKey && this._lastTrackKey !== currentKey) {
+            /* Track changed */
+            this._lastPosition = 0;
+            this._lastPositionTime = GLib.get_monotonic_time();
+            this._hasRealPosition = false;
+        }
+        this._lastTrackKey = currentKey;
+
+        if (currentStatus !== this._lastStatus) {
+            const now = GLib.get_monotonic_time();
+            if (this._lastStatus === 'Playing' && currentStatus !== 'Playing') {
+                /* Transition from Playing to Paused/Stopped: freeze elapsed progress */
+                if (this._lastPositionTime > 0)
+                    this._lastPosition += (now - this._lastPositionTime);
+                this._lastPositionTime = now;
+            } else if (currentStatus === 'Playing') {
+                /* Started or resumed playback */
+                this._lastPositionTime = now;
+            }
+            if (currentStatus === 'Stopped') {
+                this._lastPosition = 0;
+                this._hasRealPosition = false;
+            }
+            this._lastStatus = currentStatus;
+        }
+    }
+
     /**
      * The Position property is intentionally excluded from PropertiesChanged by
      * the MPRIS spec, so a cached read would be stale. Always ask the bus.
+     * If the player does not implement Position (or returns 0 without ever
+     * reporting real positions, e.g. Firefox), fall back to monotonic elapsed time.
      *
      * @returns {Promise<number>} position in microseconds
      */
@@ -402,11 +449,44 @@ export const MprisPlayer = GObject.registerClass({
                 new GLib.VariantType('(v)'), Gio.DBusCallFlags.NONE, -1,
                 this._cancellable,
                 (connection, result) => {
+                    let busPosition = 0;
+                    let busSuccess = false;
                     try {
                         const [value] = connection.call_finish(result).deep_unpack();
-                        resolve(asNumber(value.deep_unpack()));
+                        busPosition = asNumber(value.deep_unpack());
+                        busSuccess = true;
                     } catch {
+                        busSuccess = false;
+                    }
+
+                    const now = GLib.get_monotonic_time();
+
+                    if (busSuccess && busPosition > 0) {
+                        this._hasRealPosition = true;
+                        this._lastPosition = busPosition;
+                        this._lastPositionTime = now;
+                        resolve(busPosition);
+                        return;
+                    }
+
+                    if (busSuccess && busPosition === 0 && this._hasRealPosition) {
+                        /* Player genuinely reset or rewound to 0 */
+                        this._lastPosition = 0;
+                        this._lastPositionTime = now;
                         resolve(0);
+                        return;
+                    }
+
+                    /* Player returned 0 without real position support (e.g. Firefox),
+                     * or D-Bus call failed. Use monotonic elapsed time while playing. */
+                    if (this.isPlaying) {
+                        const elapsed = this._lastPositionTime > 0 ? (now - this._lastPositionTime) : 0;
+                        const current = this.length > 0
+                            ? Math.min(this.length, this._lastPosition + elapsed)
+                            : (this._lastPosition + elapsed);
+                        resolve(current);
+                    } else {
+                        resolve(this._lastPosition);
                     }
                 });
         });
@@ -419,6 +499,9 @@ export const MprisPlayer = GObject.registerClass({
      * @param {number} offset in microseconds
      */
     seek(offset) {
+        this._lastPosition = Math.max(0, this._lastPosition + offset);
+        this._lastPositionTime = GLib.get_monotonic_time();
+
         if (!this._playerProxy || !this.canSeek)
             return;
         try {
@@ -432,6 +515,9 @@ export const MprisPlayer = GObject.registerClass({
      * @param {number} position absolute position in microseconds
      */
     setPosition(position) {
+        this._lastPosition = Math.max(0, position);
+        this._lastPositionTime = GLib.get_monotonic_time();
+
         if (!this._playerProxy || !this.canSeek)
             return;
 

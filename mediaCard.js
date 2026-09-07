@@ -160,7 +160,13 @@ export const MediaCard = GObject.registerClass({
         this._lyricsSignalId = this._lyricsManager.connect('lyrics-loaded', (_m, key) => {
             if (this._player && this._isLyricsAllowed(this._player) && this._lyricsManager.trackKey(this._player.artist, this._player.title) === key) {
                 this._lyricsData = this._lyricsManager.currentLyrics;
+                if (this._length <= 0 && this._lyricsData?.durationMs > 0) {
+                    this._length = this._lyricsData.durationMs * 1000;
+                    this._setSensitive(this._slider, this._player.canSeek && this._length > 0);
+                    this._updateSlider();
+                }
                 this._syncLyrics();
+                this._updateLyricsActive(Math.round(this._position / 1000));
             }
         });
 
@@ -701,6 +707,11 @@ export const MediaCard = GObject.registerClass({
         this._lyricsManager.resolve(this._player).then(lyricsData => {
             if (this._player && this._isLyricsAllowed(this._player)) {
                 this._lyricsData = lyricsData;
+                if (this._length <= 0 && this._lyricsData?.durationMs > 0) {
+                    this._length = this._lyricsData.durationMs * 1000;
+                    this._setSensitive(this._slider, this._player.canSeek && this._length > 0);
+                    this._updateSlider();
+                }
                 this._syncLyrics();
                 this._updateLyricsActive(Math.round(this._position / 1000));
             }
@@ -955,7 +966,9 @@ export const MediaCard = GObject.registerClass({
 
     _updateTimeLabels(position, length = this._length) {
         this._positionLabel.text = formatTime(position);
-        this._remainingLabel.text = `-${formatTime(Math.max(0, length - position))}`;
+        this._remainingLabel.text = length > 0
+            ? `-${formatTime(Math.max(0, length - position))}`
+            : '--:--';
     }
 
     /** Drop any painted art and orphan whatever download is in flight. */
@@ -1067,10 +1080,12 @@ export const MediaCard = GObject.registerClass({
         this._setRaisable(player.canRaise, player.identity);
 
         this._length = player.length;
-        const showSeek = this._settings.get_boolean('card-show-seek-bar') &&
-            this._length > 0;
+        if (this._length <= 0 && this._lyricsData?.durationMs > 0)
+            this._length = this._lyricsData.durationMs * 1000;
+
+        const showSeek = this._settings.get_boolean('card-show-seek-bar');
         this._seekBox.visible = showSeek;
-        this._setSensitive(this._slider, player.canSeek);
+        this._setSensitive(this._slider, player.canSeek && this._length > 0);
 
         /* Skipping needs Seek(); a player without it gets no skip buttons. */
         const showSkip = this._settings.get_boolean('card-show-seek-buttons') &&

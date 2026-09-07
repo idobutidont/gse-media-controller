@@ -182,13 +182,30 @@ export class LyricsData {
      * @param {boolean} params.isInstrumental
      * @param {Array<{timeMs: number, text: string, isRTL: boolean}>} params.lines
      * @param {string} params.plainLyrics
+     * @param {number} [params.durationMs]
      */
-    constructor({trackKey, synced, isInstrumental, lines, plainLyrics}) {
+    constructor({trackKey, synced, isInstrumental, lines, plainLyrics, durationMs = 0}) {
         this.trackKey = trackKey;
         this.synced = synced;
         this.isInstrumental = isInstrumental;
         this.lines = lines ?? [];
         this.plainLyrics = plainLyrics ?? '';
+        this._durationMs = durationMs;
+    }
+
+    /**
+     * Estimated track duration in milliseconds.
+     * Uses provided durationMs or computes from the last lyric line.
+     * @returns {number}
+     */
+    get durationMs() {
+        if (this._durationMs > 0)
+            return this._durationMs;
+        if (this.lines.length > 0) {
+            const last = this.lines[this.lines.length - 1];
+            return last.timeMs + (last.durationMs || 5000);
+        }
+        return 0;
     }
 
     /**
@@ -390,12 +407,14 @@ export const LyricsManager = GObject.registerClass({
             isSynced = lines.length > 0;
         }
 
+        const durationMs = raw.duration ? Math.round(raw.duration * 1000) : 0;
         const lyricsData = new LyricsData({
             trackKey: key,
             synced: isSynced,
             isInstrumental: raw.instrumental === true,
             lines,
             plainLyrics: raw.plainLyrics || '',
+            durationMs,
         });
 
         this._memoryCache.set(key, lyricsData);
@@ -595,12 +614,14 @@ export const LyricsManager = GObject.registerClass({
                         isSynced = lines.length > 0;
                     }
 
+                    const durationMs = parsed.duration ? Math.round(parsed.duration * 1000) : 0;
                     resolve(new LyricsData({
                         trackKey: key,
                         synced: isSynced,
                         isInstrumental: parsed.instrumental === true,
                         lines,
                         plainLyrics: parsed.plainLyrics || '',
+                        durationMs,
                     }));
                 } catch {
                     resolve(null);
