@@ -174,6 +174,24 @@ export function parseLRC(lrcContent) {
     return {lines, offsetMs};
 }
 
+const INSTRUMENTAL_REGEX = /^[\s♪♫🎵🎶♩♬♭♮♯~～\-_()\[\]*.]*(?:instrumental|solo|guitar solo|music|interlude|intro|outro|bgm)?[\s♪♫🎵🎶~～\-_()\[\]*.]*$/i;
+
+/**
+ * Returns true if the lyric text is empty, contains only musical symbols,
+ * or is an instrumental/interlude placeholder.
+ *
+ * @param {string} text
+ * @returns {boolean}
+ */
+export function isInstrumentalText(text) {
+    if (!text || typeof text !== 'string')
+        return true;
+    const trimmed = text.trim();
+    if (!trimmed)
+        return true;
+    return INSTRUMENTAL_REGEX.test(trimmed);
+}
+
 export class LyricsData {
     /**
      * @param {object} params
@@ -191,6 +209,16 @@ export class LyricsData {
         this.lines = lines ?? [];
         this.plainLyrics = plainLyrics ?? '';
         this._durationMs = durationMs;
+
+        this._firstRealLyricIndex = -1;
+        this._lastRealLyricIndex = -1;
+        for (let i = 0; i < this.lines.length; i++) {
+            if (!isInstrumentalText(this.lines[i].text)) {
+                if (this._firstRealLyricIndex === -1)
+                    this._firstRealLyricIndex = i;
+                this._lastRealLyricIndex = i;
+            }
+        }
     }
 
     /**
@@ -228,6 +256,7 @@ export class LyricsData {
                 isRTL: false,
                 isIntro: true,
                 isOutro: false,
+                isInstrumental: true,
             };
         }
 
@@ -247,8 +276,12 @@ export class LyricsData {
         }
 
         const line = lines[index];
-        const isOutro = index === lines.length - 1 &&
-            positionMs > line.timeMs + (line.durationMs || 10000);
+        const isInstrumental = isInstrumentalText(line.text);
+        const isIntro = this._firstRealLyricIndex >= 0
+            ? index < this._firstRealLyricIndex
+            : false;
+        const isOutro = (this._lastRealLyricIndex >= 0 && index > this._lastRealLyricIndex) ||
+            (index === lines.length - 1 && positionMs > line.timeMs + (line.durationMs || 10000));
 
         return {
             index,
@@ -257,8 +290,9 @@ export class LyricsData {
             isRTL: line.isRTL,
             timeMs: line.timeMs,
             durationMs: line.durationMs || 4000,
-            isIntro: false,
+            isIntro,
             isOutro,
+            isInstrumental,
         };
     }
 }

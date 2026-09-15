@@ -378,14 +378,14 @@ class MediaIndicator extends PanelMenu.Button {
         let lineDurationMs = 0;
         let speedMultiplier = 1.0;
 
-        if (active?.text) {
+        if (active?.text && !active.isInstrumental) {
             displayText = active.text;
             isLyric = true;
             if (prefs.lyricsDynamicSpeed && active.durationMs > 0) {
                 lineDurationMs = active.durationMs;
                 speedMultiplier = prefs.lyricsDynamicMultiplier || 1.0;
             }
-        } else if (active?.isIntro || active?.isOutro) {
+        } else if (active?.isIntro || active?.isOutro || active?.isInstrumental) {
             displayText = textFallback;
             isLyric = false;
         }

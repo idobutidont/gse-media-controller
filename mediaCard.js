@@ -815,9 +815,9 @@ export const MediaCard = GObject.registerClass({
         const activeIndex = activeInfo ? activeInfo.index : -1;
 
         /* Update compact single-line label */
-        if (activeInfo?.text)
+        if (activeInfo?.text && !activeInfo.isInstrumental)
             this._lyricsCompactLabel.text = activeInfo.text;
-        else if (activeInfo?.isIntro)
+        else if (activeInfo?.isIntro || activeInfo?.isInstrumental)
             this._lyricsCompactLabel.text = '♪ ♫ ♪';
         else
             this._lyricsCompactLabel.text = '';
