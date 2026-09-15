@@ -209,6 +209,10 @@ export default class MediaControlsPreferences extends ExtensionPreferences {
             _('Scroll the text'),
             _('When off, text that does not fit is shortened with an ellipsis.')));
         scrolling.add(this._bindSensitive(settings, 'scroll-text',
+            this._switchRow(settings, 'scroll-stop-when-paused',
+                _('Stop when paused'),
+                _('Do not scroll text while media playback is paused.'))));
+        scrolling.add(this._bindSensitive(settings, 'scroll-text',
             this._switchRow(settings, 'scroll-loop',
                 _('Repeat'),
                 _('Scroll continuously. When off, the text scrolls once for each new track.'))));

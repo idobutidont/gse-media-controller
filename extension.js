@@ -55,6 +55,7 @@ const PANEL_KEYS = [
     'scroll-speed',
     'scroll-direction',
     'scroll-loop',
+    'scroll-stop-when-paused',
     'hide-when-inactive',
     'controls-on-left',
 ];
@@ -185,6 +186,7 @@ class MediaIndicator extends PanelMenu.Button {
             scrollSpeed: settings.get_int('scroll-speed'),
             scrollRightToLeft: settings.get_string('scroll-direction') === 'right-to-left',
             scrollLoop: settings.get_boolean('scroll-loop'),
+            scrollStopWhenPaused: settings.get_boolean('scroll-stop-when-paused'),
             hideWhenInactive: settings.get_boolean('hide-when-inactive'),
             controlsOnLeft: settings.get_boolean('controls-on-left'),
         };
@@ -503,8 +505,10 @@ class MediaIndicator extends PanelMenu.Button {
 
         this.container.visible = true;
 
+        const shouldScroll = prefs.scrollText && (!prefs.scrollStopWhenPaused || player.isPlaying);
+
         this._label.setWidth(prefs.textWidth);
-        this._label.setScrolling(prefs.scrollText, prefs.scrollSpeed,
+        this._label.setScrolling(shouldScroll, prefs.scrollSpeed,
             prefs.scrollRightToLeft, prefs.scrollLoop);
 
         /* Refresh position and lyrics */

@@ -109,6 +109,12 @@
       <description>When false the text scrolls once per track and then rests, truncated with an ellipsis.</description>
     </key>
 
+    <key name="scroll-stop-when-paused" type="b">
+      <default>false</default>
+      <summary>Stop text scrolling when media is paused</summary>
+      <description>Do not scroll panel text while media playback is paused.</description>
+    </key>
+
     <key name="scroll-direction"
          enum="org.gnome.shell.extensions.media-controller.scroll-direction">
       <default>'left-to-right'</default>
